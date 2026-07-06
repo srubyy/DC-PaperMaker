@@ -592,7 +592,6 @@ function buildPaperHtml({ subject, title, subtitle, totalMarks, yearMin, yearMax
           font-weight: 800;
           letter-spacing: 6px;
           color: rgba(0, 0, 0, 0.05);
-          text-transform: uppercase;
           pointer-events: none;
           z-index: -1000;
           white-space: nowrap;
