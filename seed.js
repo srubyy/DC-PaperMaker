@@ -28,7 +28,7 @@ const mockQuestions = [
     question_type: "Structured",
     marks: 4,
     difficulty: "Medium",
-    question_text: "Refer to the covalent bonding structural diagram below:\n\n[IMAGE: https://upload.wikimedia.org/wikipedia/commons/9/9c/Water-2D-flat.png]\n\nIdentify the compound shown in the diagram and state the number of single covalent bonds and lone pairs on the central oxygen atom.",
+    question_text: "Refer to the covalent bonding structural diagram below:\n\n[IMAGE: /images/water_molecule_diagram.jpg]\n\nIdentify the compound shown in the diagram and state the number of single covalent bonds and lone pairs on the central oxygen atom.",
     answer_text: "1. Compound shown: Water (H2O).\n2. Single covalent bonds: 2.\n3. Lone pairs on the central oxygen atom: 2.",
     status: "Final"
   },
