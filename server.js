@@ -435,7 +435,7 @@ function buildPaperHtml({ subject, title, subtitle, totalMarks, yearMin, yearMax
             <span class="item-title">Question ${index + 1} Mark Scheme</span>
             <span class="item-meta">[${q.marks} Marks | ${q.id}]</span>
           </div>
-          <div class="item-body font-mono">${escapeHtml(q.answer_text).replace(/\n/g, '<br>')}</div>
+          <div class="item-body font-mono">${formatRichText(q.answer_text)}</div>
         </div>`;
     } else {
       return `
@@ -444,7 +444,7 @@ function buildPaperHtml({ subject, title, subtitle, totalMarks, yearMin, yearMax
             <span class="item-title">Question ${index + 1}</span>
             <span class="item-meta">[${q.marks} Marks | ${q.id}]</span>
           </div>
-          <div class="item-body">${escapeHtml(q.question_text).replace(/\n/g, '<br>')}</div>
+          <div class="item-body">${formatRichText(q.question_text)}</div>
           <div class="item-spacing"></div>
         </div>`;
     }
@@ -642,6 +642,23 @@ function escapeHtml(unsafe) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
+}
+
+// Helper: Format question and answer texts to support embedded [IMAGE: url] placeholders
+function formatRichText(text) {
+  let escaped = escapeHtml(text);
+  
+  // Parse [IMAGE: url] placeholders and replace with structured, print-safe HTML images
+  const imageRegex = /\[IMAGE:\s*([^\]\s]+)\]/gi;
+  escaped = escaped.replace(imageRegex, (match, url) => {
+    const cleanUrl = url.replace(/&amp;/g, '&');
+    return `
+      <div style="margin: 15px 0; text-align: center; page-break-inside: avoid;">
+        <img src="${cleanUrl}" style="max-width: 90%; max-height: 250px; object-fit: contain; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px; background-color: #ffffff;" />
+      </div>`;
+  });
+
+  return escaped.replace(/\n/g, '<br>');
 }
 
 app.listen(PORT, () => {
