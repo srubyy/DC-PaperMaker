@@ -1,0 +1,21 @@
+{
+  "name": "direction-classes-question-generator",
+  "version": "1.0.0",
+  "description": "Question Paper and Mark Scheme Generator for Direction Classes",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "seed": "node seed.js"
+  },
+  "dependencies": {
+    "archiver": "^6.0.2",
+    "cors": "^2.8.5",
+    "csv-parser": "^3.0.0",
+    "express": "^4.19.2",
+    "multer": "^1.4.5-lts.1",
+    "puppeteer": "^22.6.0",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^5.1.7"
+  }
+}
