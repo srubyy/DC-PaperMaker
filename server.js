@@ -6,6 +6,8 @@ import fs from 'fs';
 import csv from 'csv-parser';
 import archiver from 'archiver';
 import puppeteer from 'puppeteer';
+import http from 'http';
+import https from 'https';
 import { fileURLToPath } from 'url';
 import { getDb, initDb } from './db.js';
 
@@ -308,8 +310,21 @@ app.post('/api/generate', async (req, res) => {
       }
     }
 
+    // Convert all remote/local image URL placeholders inside questions list to inline Base64 data URLs
+    const processedQuestions = await Promise.all(
+      finalQuestionsList.map(async (q) => {
+        const questionTextProcessed = await replaceImagePlaceholdersWithBase64(q.question_text);
+        const answerTextProcessed = await replaceImagePlaceholdersWithBase64(q.answer_text);
+        return {
+          ...q,
+          question_text: questionTextProcessed,
+          answer_text: answerTextProcessed
+        };
+      })
+    );
+
     // Generate total marks
-    const totalMarks = finalQuestionsList.reduce((sum, q) => sum + q.marks, 0);
+    const totalMarks = processedQuestions.reduce((sum, q) => sum + q.marks, 0);
 
     // Build HTML for Question Paper
     const questionPaperHtml = buildPaperHtml({
@@ -319,7 +334,7 @@ app.post('/api/generate', async (req, res) => {
       totalMarks,
       yearMin,
       yearMax,
-      questions: finalQuestionsList,
+      questions: processedQuestions,
       isMarkScheme: false
     });
 
@@ -331,7 +346,7 @@ app.post('/api/generate', async (req, res) => {
       totalMarks,
       yearMin,
       yearMax,
-      questions: finalQuestionsList,
+      questions: processedQuestions,
       isMarkScheme: true
     });
 
@@ -659,6 +674,73 @@ function formatRichText(text) {
   });
 
   return escaped.replace(/\n/g, '<br>');
+}
+
+// Helper: Fetch image from remote URL and encode to Base64 data URL
+function fetchImageAsBase64(imageUrl) {
+  return new Promise((resolve) => {
+    if (imageUrl.startsWith('data:')) {
+      return resolve(imageUrl);
+    }
+
+    const client = imageUrl.startsWith('https') ? https : http;
+    const requestOptions = {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      }
+    };
+
+    client.get(imageUrl, requestOptions, (res) => {
+      if (res.statusCode !== 200) {
+        console.error(`Failed to fetch image: HTTP status ${res.statusCode} for ${imageUrl}`);
+        return resolve(imageUrl); // Fallback
+      }
+
+      const chunks = [];
+      res.on('data', (chunk) => chunks.push(chunk));
+      res.on('end', () => {
+        const buffer = Buffer.concat(chunks);
+        const mimeType = res.headers['content-type'] || 'image/png';
+        const base64 = buffer.toString('base64');
+        resolve(`data:${mimeType};base64,${base64}`);
+      });
+    }).on('error', (err) => {
+      console.error(`Error requesting remote image ${imageUrl}:`, err.message);
+      resolve(imageUrl); // Fallback
+    });
+  });
+}
+
+// Helper: Scan text for [IMAGE: url] placeholders and inline them to Base64
+async function replaceImagePlaceholdersWithBase64(text) {
+  if (!text) return text;
+
+  const imageRegex = /\[IMAGE:\s*([^\]\s]+)\]/gi;
+  const matches = [...text.matchAll(imageRegex)];
+
+  if (matches.length === 0) return text;
+
+  let newText = text;
+  for (const match of matches) {
+    const originalPlaceholder = match[0];
+    const imageUrl = match[1];
+
+    let base64Url = imageUrl;
+    if (imageUrl.startsWith('/')) {
+      const localPath = path.join(__dirname, 'public', imageUrl);
+      if (fs.existsSync(localPath)) {
+        const mimeType = localPath.endsWith('.svg') ? 'image/svg+xml' : 'image/png';
+        const fileBuffer = fs.readFileSync(localPath);
+        base64Url = `data:${mimeType};base64,${fileBuffer.toString('base64')}`;
+      }
+    } else {
+      base64Url = await fetchImageAsBase64(imageUrl);
+    }
+
+    newText = newText.replace(originalPlaceholder, `[IMAGE: ${base64Url}]`);
+  }
+
+  return newText;
 }
 
 app.listen(PORT, () => {
