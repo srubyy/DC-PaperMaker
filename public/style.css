@@ -694,6 +694,7 @@ input:checked + .toggle-slider:before {
   text-align: center;
   padding: 24px 15px;
   cursor: pointer;
+  position: relative;
   transition: var(--transition-smooth);
 }
 
