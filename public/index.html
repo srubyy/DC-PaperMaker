@@ -11,10 +11,6 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <!-- Ambient background glow elements -->
-  <div class="bg-glow bg-glow-1"></div>
-  <div class="bg-glow bg-glow-2"></div>
-
   <div class="app-container">
     <!-- Header -->
     <header class="app-header">
@@ -27,7 +23,7 @@
 
     <div class="main-layout">
       <!-- Left Column: Settings Panel -->
-      <main class="control-panel glass-card">
+      <main class="control-panel card">
         <h2 class="section-title">Configure Examination</h2>
         
         <form id="generator-form" onsubmit="event.preventDefault();">
@@ -103,7 +99,7 @@
       <!-- Right Column: Status & Import Panel -->
       <aside class="action-panel">
         <!-- Live Statistics Card -->
-        <div class="glass-card stat-card">
+        <div class="card stat-card">
           <h2 class="section-title">Generation Summary</h2>
           
           <div class="stats-grid">
@@ -133,7 +129,7 @@
         </div>
 
         <!-- Import New Database Data Card -->
-        <div class="glass-card import-card">
+        <div class="card import-card">
           <h3 class="subsection-title">Database Utility</h3>
           <p class="help-text">Drag and drop or upload a CSV file to import additional questions into your bank.</p>
           
