@@ -686,9 +686,17 @@ function formatRichText(text) {
   const imageRegex = /\[IMAGE:\s*([^\]\s]+)\]/gi;
   escaped = escaped.replace(imageRegex, (match, url) => {
     const cleanUrl = url.replace(/&amp;/g, '&');
+    const isMathSlice = cleanUrl.includes('math_0580');
+    // If it's a Mathematics visual slice, expand to full width and remove height limit to make it readable.
+    const imgStyle = isMathSlice
+      ? 'width: 100%; max-height: none; object-fit: contain; border: none; padding: 0; background-color: #ffffff;'
+      : 'max-width: 90%; max-height: 250px; object-fit: contain; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px; background-color: #ffffff;';
+    const wrapperStyle = isMathSlice
+      ? 'margin: 5px 0; text-align: left; page-break-inside: avoid;'
+      : 'margin: 15px 0; text-align: center; page-break-inside: avoid;';
     return `
-      <div style="margin: 15px 0; text-align: center; page-break-inside: avoid;">
-        <img src="${cleanUrl}" style="max-width: 90%; max-height: 250px; object-fit: contain; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px; background-color: #ffffff;" />
+      <div style="${wrapperStyle}">
+        <img src="${cleanUrl}" style="${imgStyle}" />
       </div>`;
   });
 
