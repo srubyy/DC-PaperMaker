@@ -462,7 +462,7 @@ async function renderPdf(browser, html, subject, documentType, headerImage, foot
 
 // Helper: Build structured HTML for the exam/mark scheme
 function buildPaperHtml({ subject, title, subtitle, totalMarks, yearMin, yearMax, questions, isMarkScheme }) {
-  const pageBreakRule = subject === 'Mathematics' ? 'auto' : 'avoid';
+  const pageBreakRule = 'avoid';
   const contentHtml = questions.map((q, index) => {
     if (isMarkScheme) {
       const bodyClass = q.answer_text.includes('[IMAGE:') ? 'item-body' : 'item-body font-mono';
@@ -476,7 +476,12 @@ function buildPaperHtml({ subject, title, subtitle, totalMarks, yearMin, yearMax
           <div class="${bodyClass}">${formatRichText(q.answer_text, subject)}</div>
         </div>`;
     } else {
-      const spacingHtml = subject === 'Mathematics' ? '' : '<div class="item-spacing"></div>';
+      let workspaceHeight = 40;
+      if (q.marks === 2) {
+        workspaceHeight = 80;
+      } else if (q.marks >= 3) {
+        workspaceHeight = 120;
+      }
       const headerStyle = subject === 'Mathematics' ? 'style="margin-bottom: 0px;"' : '';
       return `
         <div class="item-block">
@@ -485,7 +490,7 @@ function buildPaperHtml({ subject, title, subtitle, totalMarks, yearMin, yearMax
             <span class="item-meta">[${q.marks} Marks | ${q.id}]</span>
           </div>
           <div class="item-body">${formatRichText(q.question_text, subject)}</div>
-          ${spacingHtml}
+          <div class="question-workspace" style="height: ${workspaceHeight}pt;"></div>
         </div>`;
     }
   }).join('');
@@ -603,10 +608,10 @@ function buildPaperHtml({ subject, title, subtitle, totalMarks, yearMin, yearMax
           border-radius: 4px;
           line-height: 1.5;
         }
-        .item-spacing {
-          height: 100px;
-          border-bottom: 1px dotted #ccc;
-          margin-top: 20px;
+        .question-workspace {
+          display: block;
+          width: 100%;
+          background: transparent;
         }
         .watermark {
           position: fixed;
