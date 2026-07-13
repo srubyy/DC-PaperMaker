@@ -3,12 +3,44 @@ import re
 import sqlite3
 import pdfplumber
 import fitz
+from PIL import Image
 
 # Path configuration
 igcse_dir = "/Users/srutibaliga/Documents/igcse math"
 db_path = "/Users/srutibaliga/Documents/Projects/Paper/questions.db"
 img_dir = "/Users/srutibaliga/Documents/Projects/Paper/public/images/math_0580"
 os.makedirs(img_dir, exist_ok=True)
+
+def slice_and_save_image(fitz_pixmap, base_filename, slice_height=80):
+    # Save pixmap to a temporary file
+    temp_path = os.path.join(img_dir, f"temp_{base_filename}.jpg")
+    fitz_pixmap.save(temp_path)
+    
+    # Open with PIL
+    img = Image.open(temp_path)
+    width, height = img.size
+    
+    parts = []
+    y = 0
+    part_idx = 0
+    while y < height:
+        h = min(slice_height, height - y)
+        box = (0, y, width, y + h)
+        part_img = img.crop(box)
+        
+        part_filename = f"{base_filename}_part{part_idx}.jpg"
+        part_path = os.path.join(img_dir, part_filename)
+        part_img.save(part_path, "JPEG", quality=90)
+        
+        parts.append(part_filename)
+        y += h
+        part_idx += 1
+        
+    # Clean up temp file
+    if os.path.exists(temp_path):
+        os.remove(temp_path)
+        
+    return parts
 
 # Topics list
 TOPIC_KEYWORDS = {
@@ -351,14 +383,15 @@ def parse_pdf_file(filename):
                     fitz_page = doc[page_idx]
                     # Page width constraint: crop inside page frame borders (x=68 to 532) and exclude margin question numbers
                     rect_q = fitz.Rect(68, max(95, y0), 532, min(728, y1))
-                    
                     pix_q = fitz_page.get_pixmap(clip=rect_q, dpi=150)
-                    q_filename = f"q_{year}_{safe_comp}_q{q_num}.jpg"
-                    out_path_q = os.path.join(img_dir, q_filename)
-                    pix_q.save(out_path_q)
+                    
+                    # Slice the QP image into 80px high horizontal strips for dynamic page breaks
+                    base_q_name = f"q_{year}_{safe_comp}_q{q_num}"
+                    q_parts = slice_and_save_image(pix_q, base_q_name, slice_height=80)
+                    question_html = "".join([f"[IMAGE: /images/math_0580/{p}]" for p in q_parts])
                     
                     # 2. CROP MS ANSWER SLICE IMAGE
-                    ms_filename = f"ms_fallback.jpg"
+                    answer_html = "See marking guide instructions."
                     if comp in consolidated_ms and q_num in consolidated_ms[comp]:
                         ms_page_idx, ms_y0, ms_y1, ms_x0 = consolidated_ms[comp][q_num]
                         fitz_ms_page = doc[ms_page_idx]
@@ -367,12 +400,10 @@ def parse_pdf_file(filename):
                         rect_ms = fitz.Rect(ms_x0 + 1, max(70, ms_y0 - 2), 535, min(750, ms_y1 + 2))
                         pix_ms = fitz_ms_page.get_pixmap(clip=rect_ms, dpi=150)
                         
-                        ms_filename = f"ms_{year}_{safe_comp}_q{q_num}.jpg"
-                        out_path_ms = os.path.join(img_dir, ms_filename)
-                        pix_ms.save(out_path_ms)
-                    else:
-                        # Fallback empty or text slice
-                        ms_filename = f"ms_fallback.jpg"
+                        # Slice the MS image into 80px high horizontal strips for dynamic page breaks
+                        base_ms_name = f"ms_{year}_{safe_comp}_q{q_num}"
+                        ms_parts = slice_and_save_image(pix_ms, base_ms_name, slice_height=80)
+                        answer_html = "".join([f"[IMAGE: /images/math_0580/{p}]" for p in ms_parts])
                         
                     # Classify topic
                     topic, subtopic = classify_topic(raw_q_text)
@@ -386,10 +417,6 @@ def parse_pdf_file(filename):
                         
                     # Construct unique question ID
                     question_id = f"MATH-0580-{year}-ON-{safe_comp.split('_')[-1]}-Q{q_num}"
-                    
-                    # Store as image tag format
-                    question_html = f"[IMAGE: /images/math_0580/{q_filename}]"
-                    answer_html = f"[IMAGE: /images/math_0580/{ms_filename}]" if ms_filename != "ms_fallback.jpg" else "See marking guide instructions."
                     
                     questions_extracted.append({
                         "id": question_id,

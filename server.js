@@ -685,27 +685,59 @@ function escapeHtml(unsafe) {
 // Helper: Format question and answer texts to support embedded [IMAGE: url] placeholders
 function formatRichText(text, subject) {
   let escaped = escapeHtml(text);
-  
-  // Parse [IMAGE: url] placeholders and replace with structured, print-safe HTML images
   const imageRegex = /\[IMAGE:\s*([^\]\s]+)\]/gi;
-  escaped = escaped.replace(imageRegex, (match, url) => {
-    const cleanUrl = url.replace(/&amp;/g, '&');
-    // Identify Math slices using subject parameter or url structure
-    const isMathSlice = (subject === 'Mathematics') || cleanUrl.includes('math_0580');
-    // If it's a Mathematics visual slice, expand to full width and remove height limit to make it readable.
-    const imgStyle = isMathSlice
-      ? 'width: 100%; max-height: none; object-fit: contain; border: none; padding: 0; background-color: #ffffff; box-shadow: none;'
-      : 'max-width: 90%; max-height: 250px; object-fit: contain; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px; background-color: #ffffff;';
-    const wrapperStyle = isMathSlice
-      ? 'margin: 5px 0; text-align: left; page-break-inside: auto; border: none; padding: 0; background: transparent; box-shadow: none;'
-      : 'margin: 15px 0; text-align: center; page-break-inside: avoid;';
-    return `
-      <div style="${wrapperStyle}">
-        <img src="${cleanUrl}" style="${imgStyle}" />
-      </div>`;
-  });
+  
+  let lastIndex = 0;
+  let result = '';
+  let match;
+  let consecutiveImages = [];
+  
+  const flushImages = () => {
+    if (consecutiveImages.length === 0) return '';
+    
+    // Check if any image is a Math slice
+    const hasMathSlice = consecutiveImages.some(url => url.includes('math_0580') || subject === 'Mathematics');
+    
+    if (hasMathSlice) {
+      // Math visual slices: render in a zero-space column block allowing clean image splits
+      const imgTags = consecutiveImages.map(url => {
+        return `<img src="${url}" style="width: 100%; display: block; margin: 0; padding: 0; border: none; box-shadow: none; page-break-inside: auto; background-color: #ffffff;" />`;
+      }).join('');
+      consecutiveImages = [];
+      return `
+        <div style="margin: 5px 0; line-height: 0; font-size: 0; text-align: left; page-break-inside: auto; border: none; padding: 0; background: transparent; box-shadow: none;">
+          ${imgTags}
+        </div>`;
+    } else {
+      // Fallback for general subject illustrations
+      const rendered = consecutiveImages.map(url => {
+        return `
+          <div style="margin: 15px 0; text-align: center; page-break-inside: avoid;">
+            <img src="${url}" style="max-width: 90%; max-height: 250px; object-fit: contain; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px; background-color: #ffffff;" />
+          </div>`;
+      }).join('');
+      consecutiveImages = [];
+      return rendered;
+    }
+  };
 
-  return escaped.replace(/\n/g, '<br>');
+  imageRegex.lastIndex = 0;
+  while ((match = imageRegex.exec(escaped)) !== null) {
+    const textBefore = escaped.substring(lastIndex, match.index);
+    if (textBefore.trim().length > 0) {
+      result += flushImages();
+      result += textBefore.replace(/\n/g, '<br>');
+    }
+    const url = match[1].replace(/&amp;/g, '&');
+    consecutiveImages.push(url);
+    lastIndex = imageRegex.lastIndex;
+  }
+  
+  result += flushImages();
+  if (lastIndex < escaped.length) {
+    result += escaped.substring(lastIndex).replace(/\n/g, '<br>');
+  }
+  return result;
 }
 
 // Helper: Fetch image from remote URL and encode to Base64 data URL
