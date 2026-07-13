@@ -439,13 +439,11 @@ async function generateExamPaper() {
 // Brand Image Upload Handling (Header & Footer)
 function setupImageUploads() {
   // Header
-  headerUploadBox.addEventListener('click', () => headerImageInput.click());
   headerImageInput.addEventListener('change', (e) => {
     handleImageFile(e.target.files[0], 'header');
   });
 
   // Footer
-  footerUploadBox.addEventListener('click', () => footerImageInput.click());
   footerImageInput.addEventListener('change', (e) => {
     handleImageFile(e.target.files[0], 'footer');
   });
