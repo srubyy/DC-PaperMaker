@@ -31,15 +31,11 @@ const validationErrorBox = document.getElementById('validation-error-box');
 const errorMessageText = document.getElementById('error-message-text');
 const generateBtn = document.getElementById('generate-btn');
 
-const csvDropZone = document.getElementById('csv-drop-zone');
-const csvFileInput = document.getElementById('csv-file-input');
-
 // Initialize Page
 window.addEventListener('DOMContentLoaded', () => {
   loadSubjects();
   setupYearSliders();
   setupImageUploads();
-  setupCsvImporter();
   
   // Submit action
   generateBtn.addEventListener('click', generateExamPaper);
