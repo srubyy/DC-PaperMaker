@@ -248,11 +248,12 @@ def parse_pdf_file(filename):
         is_qp_cover = "Cambridge IGCSE" in text and "MATHEMATICS" in text and "MARK SCHEME" not in text.upper()
         is_ms_cover = "MARK SCHEME" in text.upper() or "MAXIMUM MARK" in text.upper()
         
-        comp_match = re.search(r'0580/(21|22|23|02)', text)
+        comp_match = re.search(r'0580[\s/\n]*(21|22|23|02)', text)
         if comp_match:
-            last_comp = comp_match.group(0)
-            if last_comp == "0580/02":
-                last_comp = "0580/22"
+            variant = comp_match.group(1)
+            if variant == "02":
+                variant = "22"
+            last_comp = f"0580/{variant}"
             
         if is_qp_cover:
             in_ms = False
@@ -392,18 +393,26 @@ def parse_pdf_file(filename):
                     
                     # 2. CROP MS ANSWER SLICE IMAGE
                     answer_html = "See marking guide instructions."
-                    if comp in consolidated_ms and q_num in consolidated_ms[comp]:
-                        ms_page_idx, ms_y0, ms_y1, ms_x0 = consolidated_ms[comp][q_num]
-                        fitz_ms_page = doc[ms_page_idx]
-                        
-                        # Crop from ms_x0+1 to 535 to capture columns 2,3,4 inside the table border (excluding column 1 and right frame line)
-                        rect_ms = fitz.Rect(ms_x0 + 1, max(52, ms_y0 - 2), 535, min(750, ms_y1 + 2))
-                        pix_ms = fitz_ms_page.get_pixmap(clip=rect_ms, dpi=150)
-                        
-                        # Slice the MS image into 80px high horizontal strips for dynamic page breaks
-                        base_ms_name = f"ms_{year}_{safe_comp}_q{q_num}"
-                        ms_parts = slice_and_save_image(pix_ms, base_ms_name, slice_height=80)
-                        answer_html = "".join([f"[IMAGE: /images/math_0580/{p}]" for p in ms_parts])
+                    if comp in ms_coords and q_num in ms_coords[comp]:
+                        # Find the MS pages for this session (closest ms_page_idx after page_idx)
+                        eligible_coords = [item for item in ms_coords[comp][q_num] if item[0] > page_idx]
+                        if eligible_coords:
+                            min_ms_page = min(item[0] for item in eligible_coords)
+                            session_coords = [item for item in eligible_coords if item[0] == min_ms_page]
+                            
+                            ms_y0 = min(item[1] for item in session_coords)
+                            ms_y1 = max(item[2] for item in session_coords)
+                            ms_x0 = max(item[3] for item in session_coords)
+                            
+                            fitz_ms_page = doc[min_ms_page]
+                            # Crop from ms_x0+1 to 535 to capture columns 2,3,4 inside the table border (excluding column 1 and right frame line)
+                            rect_ms = fitz.Rect(ms_x0 + 1, max(52, ms_y0 - 2), 535, min(750, ms_y1 + 2))
+                            pix_ms = fitz_ms_page.get_pixmap(clip=rect_ms, dpi=150)
+                            
+                            # Slice the MS image into 80px high horizontal strips for dynamic page breaks
+                            base_ms_name = f"ms_{year}_{safe_comp}_q{q_num}"
+                            ms_parts = slice_and_save_image(pix_ms, base_ms_name, slice_height=80)
+                            answer_html = "".join([f"[IMAGE: /images/math_0580/{p}]" for p in ms_parts])
                         
                     # Classify topic
                     topic, subtopic = classify_topic(raw_q_text)
