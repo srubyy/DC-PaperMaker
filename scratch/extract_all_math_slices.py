@@ -3,7 +3,7 @@ import re
 import sqlite3
 import pdfplumber
 import fitz
-from PIL import Image, ImageChops
+from PIL import Image
 
 # Path configuration
 igcse_dir = "/Users/srutibaliga/Documents/igcse math"
@@ -11,25 +11,13 @@ db_path = "/Users/srutibaliga/Documents/Projects/Paper/questions.db"
 img_dir = "/Users/srutibaliga/Documents/Projects/Paper/public/images/math_0580"
 os.makedirs(img_dir, exist_ok=True)
 
-def trim_vertical_whitespace(img):
-    bg = Image.new(img.mode, img.size, (255, 255, 255))
-    diff = ImageChops.difference(img, bg)
-    gray_diff = diff.convert("L")
-    mask = gray_diff.point(lambda p: 255 if p > 15 else 0)
-    bbox = mask.getbbox()
-    if bbox:
-        # Crop vertically to strip top/bottom whitespace rows, keeping full horizontal width
-        return img.crop((0, bbox[1], img.size[0], bbox[3]))
-    return img
-
 def slice_and_save_image(fitz_pixmap, base_filename, slice_height=80):
     # Save pixmap to a temporary file
     temp_path = os.path.join(img_dir, f"temp_{base_filename}.jpg")
     fitz_pixmap.save(temp_path)
     
-    # Open with PIL and trim vertical whitespace first
+    # Open with PIL
     img = Image.open(temp_path)
-    img = trim_vertical_whitespace(img)
     width, height = img.size
     
     parts = []
@@ -393,8 +381,8 @@ def parse_pdf_file(filename):
                         
                     # 1. CROP QUESTION SLICE IMAGE
                     fitz_page = doc[page_idx]
-                    # Page width constraint: crop inside page frame borders (x=68 to 532) and exclude margin question numbers
-                    rect_q = fitz.Rect(68, max(95, y0), 532, min(728, y1))
+                    # Page width constraint: crop inside page frame borders (x=42 to 553) to exclude outer border lines but keep full diagrams/text
+                    rect_q = fitz.Rect(42, max(52, y0), 553, min(738, y1))
                     pix_q = fitz_page.get_pixmap(clip=rect_q, dpi=150)
                     
                     # Slice the QP image into 80px high horizontal strips for dynamic page breaks
@@ -409,7 +397,7 @@ def parse_pdf_file(filename):
                         fitz_ms_page = doc[ms_page_idx]
                         
                         # Crop from ms_x0+1 to 535 to capture columns 2,3,4 inside the table border (excluding column 1 and right frame line)
-                        rect_ms = fitz.Rect(ms_x0 + 1, max(70, ms_y0 - 2), 535, min(750, ms_y1 + 2))
+                        rect_ms = fitz.Rect(ms_x0 + 1, max(52, ms_y0 - 2), 535, min(750, ms_y1 + 2))
                         pix_ms = fitz_ms_page.get_pixmap(clip=rect_ms, dpi=150)
                         
                         # Slice the MS image into 80px high horizontal strips for dynamic page breaks
