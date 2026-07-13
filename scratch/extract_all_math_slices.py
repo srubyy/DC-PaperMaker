@@ -3,7 +3,7 @@ import re
 import sqlite3
 import pdfplumber
 import fitz
-from PIL import Image
+from PIL import Image, ImageChops
 
 # Path configuration
 igcse_dir = "/Users/srutibaliga/Documents/igcse math"
@@ -11,13 +11,25 @@ db_path = "/Users/srutibaliga/Documents/Projects/Paper/questions.db"
 img_dir = "/Users/srutibaliga/Documents/Projects/Paper/public/images/math_0580"
 os.makedirs(img_dir, exist_ok=True)
 
+def trim_vertical_whitespace(img):
+    bg = Image.new(img.mode, img.size, (255, 255, 255))
+    diff = ImageChops.difference(img, bg)
+    gray_diff = diff.convert("L")
+    mask = gray_diff.point(lambda p: 255 if p > 15 else 0)
+    bbox = mask.getbbox()
+    if bbox:
+        # Crop vertically to strip top/bottom whitespace rows, keeping full horizontal width
+        return img.crop((0, bbox[1], img.size[0], bbox[3]))
+    return img
+
 def slice_and_save_image(fitz_pixmap, base_filename, slice_height=80):
     # Save pixmap to a temporary file
     temp_path = os.path.join(img_dir, f"temp_{base_filename}.jpg")
     fitz_pixmap.save(temp_path)
     
-    # Open with PIL
+    # Open with PIL and trim vertical whitespace first
     img = Image.open(temp_path)
+    img = trim_vertical_whitespace(img)
     width, height = img.size
     
     parts = []
