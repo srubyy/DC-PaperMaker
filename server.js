@@ -464,13 +464,14 @@ async function renderPdf(browser, html, subject, documentType, headerImage, foot
 function buildPaperHtml({ subject, title, subtitle, totalMarks, yearMin, yearMax, questions, isMarkScheme }) {
   const contentHtml = questions.map((q, index) => {
     if (isMarkScheme) {
+      const bodyClass = q.answer_text.includes('[IMAGE:') ? 'item-body' : 'item-body font-mono';
       return `
         <div class="item-block">
           <div class="item-header">
             <span class="item-title">Question ${index + 1} Mark Scheme</span>
             <span class="item-meta">[${q.marks} Marks | ${q.id}]</span>
           </div>
-          <div class="item-body font-mono">${formatRichText(q.answer_text)}</div>
+          <div class="${bodyClass}">${formatRichText(q.answer_text)}</div>
         </div>`;
     } else {
       return `

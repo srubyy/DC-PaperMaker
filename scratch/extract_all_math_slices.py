@@ -273,9 +273,15 @@ def parse_pdf_file(filename):
                             y0 = min(c[1] for c in valid_cells)
                             y1 = max(c[3] for c in valid_cells)
                             
+                            # Exclude first column (question number) by reading its right boundary
+                            first_cell = r.cells[0]
+                            first_cell_right = 109
+                            if first_cell is not None and len(first_cell) >= 3:
+                                first_cell_right = first_cell[2]
+                            
                             if base_q not in ms_coords[comp]:
                                 ms_coords[comp][base_q] = []
-                            ms_coords[comp][base_q].append((page_idx, y0, y1))
+                            ms_coords[comp][base_q].append((page_idx, y0, y1, first_cell_right))
 
     # Clean and consolidate MS crop bounds per question
     consolidated_ms = {}
@@ -284,9 +290,10 @@ def parse_pdf_file(filename):
         for base_q, coords_list in q_dict.items():
             # Group by page_idx in case split, but usually it's on one page
             page_idx = coords_list[0][0]
-            y0_min = min(y0 for p, y0, y1 in coords_list)
-            y1_max = max(y1 for p, y0, y1 in coords_list)
-            consolidated_ms[comp][base_q] = (page_idx, y0_min, y1_max)
+            y0_min = min(y0 for p, y0, y1, x0_c in coords_list)
+            y1_max = max(y1 for p, y0, y1, x0_c in coords_list)
+            x0_max = max(x0_c for p, y0, y1, x0_c in coords_list)
+            consolidated_ms[comp][base_q] = (page_idx, y0_min, y1_max, x0_max)
 
     # 3. Process Question Papers and slice visual questions
     questions_extracted = []
@@ -342,9 +349,8 @@ def parse_pdf_file(filename):
                         
                     # 1. CROP QUESTION SLICE IMAGE
                     fitz_page = doc[page_idx]
-                    # Page width constraint, crop slightly inside outer page margins
-                    page_w = fitz_page.rect.width
-                    rect_q = fitz.Rect(35, max(50, y0), page_w - 25, min(750, y1))
+                    # Page width constraint: crop inside page frame borders (x=68 to 545) and exclude margin question numbers
+                    rect_q = fitz.Rect(68, max(95, y0), 545, min(740, y1))
                     
                     pix_q = fitz_page.get_pixmap(clip=rect_q, dpi=150)
                     q_filename = f"q_{year}_{safe_comp}_q{q_num}.jpg"
@@ -354,11 +360,11 @@ def parse_pdf_file(filename):
                     # 2. CROP MS ANSWER SLICE IMAGE
                     ms_filename = f"ms_fallback.jpg"
                     if comp in consolidated_ms and q_num in consolidated_ms[comp]:
-                        ms_page_idx, ms_y0, ms_y1 = consolidated_ms[comp][q_num]
+                        ms_page_idx, ms_y0, ms_y1, ms_x0 = consolidated_ms[comp][q_num]
                         fitz_ms_page = doc[ms_page_idx]
                         
-                        # Crop from x = 45 to 550 to capture RM table structure
-                        rect_ms = fitz.Rect(45, max(50, ms_y0 - 4), 550, min(760, ms_y1 + 4))
+                        # Crop from ms_x0+1 to 542 to capture columns 2,3,4 inside the table border (excluding column 1)
+                        rect_ms = fitz.Rect(ms_x0 + 1, max(70, ms_y0 - 2), 542, min(750, ms_y1 + 2))
                         pix_ms = fitz_ms_page.get_pixmap(clip=rect_ms, dpi=150)
                         
                         ms_filename = f"ms_{year}_{safe_comp}_q{q_num}.jpg"
