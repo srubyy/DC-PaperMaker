@@ -473,7 +473,7 @@ function buildPaperHtml({ subject, title, subtitle, totalMarks, yearMin, yearMax
             <span class="item-title">Question ${index + 1} Mark Scheme</span>
             <span class="item-meta">[${q.marks} Marks | ${q.id}]</span>
           </div>
-          <div class="${bodyClass}">${formatRichText(q.answer_text, subject)}</div>
+          <div class="${bodyClass}">${formatRichText(q.answer_text, subject, true)}</div>
         </div>`;
     } else {
       let workspaceHeight = 40;
@@ -489,7 +489,7 @@ function buildPaperHtml({ subject, title, subtitle, totalMarks, yearMin, yearMax
             <span class="item-title">Question ${index + 1}</span>
             <span class="item-meta">[${q.marks} Marks | ${q.id}]</span>
           </div>
-          <div class="item-body">${formatRichText(q.question_text, subject)}</div>
+          <div class="item-body">${formatRichText(q.question_text, subject, false)}</div>
           <div class="question-workspace" style="height: ${workspaceHeight}pt;"></div>
         </div>`;
     }
@@ -578,6 +578,12 @@ function buildPaperHtml({ subject, title, subtitle, totalMarks, yearMin, yearMax
         .item-block {
           page-break-inside: ${pageBreakRule};
           margin-bottom: 35px;
+          clear: both;
+        }
+        .item-block::after {
+          content: "";
+          display: table;
+          clear: both;
         }
         .item-header {
           display: flex;
@@ -587,6 +593,7 @@ function buildPaperHtml({ subject, title, subtitle, totalMarks, yearMin, yearMax
           padding-bottom: 5px;
           margin-bottom: 12px;
           font-size: 14px;
+          clear: both;
         }
         .item-title {
           color: #111;
@@ -599,6 +606,10 @@ function buildPaperHtml({ subject, title, subtitle, totalMarks, yearMin, yearMax
           font-size: 13px;
           white-space: pre-wrap;
           color: #222;
+          clear: both;
+        }
+        .item-body * {
+          page-break-inside: avoid;
         }
         .font-mono {
           font-family: 'Courier New', Courier, monospace;
@@ -689,7 +700,7 @@ function escapeHtml(unsafe) {
 }
 
 // Helper: Format question and answer texts to support embedded [IMAGE: url] placeholders
-function formatRichText(text, subject) {
+function formatRichText(text, subject, isMarkScheme = false) {
   let escaped = escapeHtml(text);
   const imageRegex = /\[IMAGE:\s*([^\]\s]+)\]/gi;
   
@@ -706,12 +717,13 @@ function formatRichText(text, subject) {
     
     if (hasMathSlice) {
       // Math visual slices: render in a zero-space column block allowing clean image splits
+      const breakRule = isMarkScheme ? 'avoid' : 'auto';
       const imgTags = consecutiveImages.map(url => {
-        return `<img src="${url}" style="width: 100%; display: block; margin: 0; padding: 0; border: none; box-shadow: none; page-break-inside: auto; background-color: #ffffff;" />`;
+        return `<img src="${url}" style="width: 100%; display: block; margin: 0; padding: 0; border: none; box-shadow: none; page-break-inside: ${breakRule}; background-color: #ffffff;" />`;
       }).join('');
       consecutiveImages = [];
       return `
-        <div style="margin-top: -15px; margin-bottom: 5px; line-height: 0; font-size: 0; text-align: left; page-break-inside: auto; border: none; padding: 0; background: transparent; box-shadow: none;">
+        <div style="margin-top: -15px; margin-bottom: 5px; line-height: 0; font-size: 0; text-align: left; page-break-inside: ${breakRule}; border: none; padding: 0; background: transparent; box-shadow: none;">
           ${imgTags}
         </div>`;
     } else {

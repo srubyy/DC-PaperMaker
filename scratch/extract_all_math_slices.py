@@ -287,9 +287,28 @@ def parse_pdf_file(filename):
                 for table in tables:
                     for r in table.rows:
                         valid_cells = [c for c in r.cells if c is not None]
-                        if not valid_cells:
-                            continue
-                            
+                        # Check for generic boilerplate marking instructions text
+                        try:
+                            row_text = page.crop(r.bbox).extract_text() or ""
+                            row_text_lower = row_text.lower()
+                            boilerplate_phrases = [
+                                "marks once gained",
+                                "cannot subsequently be lost",
+                                "recovery within working",
+                                "marking principles",
+                                "types of mark",
+                                "schemes will indicate",
+                                "generic marking principles",
+                                "rules of credit",
+                                "unless otherwise indicated",
+                                "ignore subsequent working",
+                                "marking scheme: teachers"
+                            ]
+                            if any(p in row_text_lower for p in boilerplate_phrases):
+                                continue
+                        except Exception:
+                            pass
+
                         # Extract first cell text to identify question number
                         q_num_cell = r.cells[0]
                         if q_num_cell is None:
