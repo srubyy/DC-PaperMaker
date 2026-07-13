@@ -416,8 +416,17 @@ async function renderPdf(browser, html, subject, documentType, headerImage, foot
   let headerTemplate = '';
   if (headerImage) {
     headerTemplate = `
-      <div style="font-size: 8px; font-family: Helvetica, Arial, sans-serif; width: 100%; display: flex; justify-content: center; padding: 10px 50px 0 50px; box-sizing: border-box;">
-        <img src="${headerImage}" style="max-height: 40px; width: auto; object-fit: contain;" />
+      <style>
+        html { -webkit-print-color-adjust: exact; }
+        #header { 
+          padding: 0 !important; 
+          margin: 0 !important; 
+          width: 100% !important;
+          height: 75px !important;
+        }
+      </style>
+      <div style="width: 100%; height: 75px; position: relative; margin: 0; padding: 0;">
+        <img src="${headerImage}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: fill; z-index: -1;" />
       </div>`;
   } else {
     headerTemplate = `
@@ -431,11 +440,19 @@ async function renderPdf(browser, html, subject, documentType, headerImage, foot
   let footerTemplate = '';
   if (footerImage) {
     footerTemplate = `
-      <div style="font-size: 8px; font-family: Helvetica, Arial, sans-serif; width: 100%; display: flex; flex-direction: column; align-items: center; padding: 0 50px 10px 50px; box-sizing: border-box;">
-        <img src="${footerImage}" style="max-height: 35px; width: auto; object-fit: contain; margin-bottom: 4px;" />
-        <div style="color: #666; font-size: 8px; width: 100%; display: flex; justify-content: space-between;">
-          <span>${documentType}</span>
-          <span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
+      <style>
+        html { -webkit-print-color-adjust: exact; }
+        #footer { 
+          padding: 0 !important; 
+          margin: 0 !important; 
+          width: 100% !important;
+          height: 75px !important;
+        }
+      </style>
+      <div style="width: 100%; height: 75px; position: relative; margin: 0; padding: 0;">
+        <img src="${footerImage}" style="position: absolute; bottom: 0; left: 0; width: 100%; height: 100%; object-fit: fill; z-index: -1;" />
+        <div style="position: absolute; bottom: 10px; right: 50px; color: #666; font-size: 8px; font-family: Helvetica, Arial, sans-serif; z-index: 10;">
+          Page <span class="pageNumber"></span> of <span class="totalPages"></span>
         </div>
       </div>`;
   } else {
