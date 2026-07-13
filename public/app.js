@@ -1,12 +1,16 @@
 // Global State
 let selectedSubject = '';
-let questionsMetadata = []; // [{ id, topic, year, marks }]
+let questionsMetadata = []; // [{ id, topic, subtopic, year, marks }]
 let availableTopics = [];
+let subtopicsGrouped = {};
+let selectedMainTopic = '';
 let headerBase64 = null;
 let footerBase64 = null;
 
 // DOM Elements
 const subjectSelect = document.getElementById('subject-select');
+const mainTopicGroup = document.getElementById('main-topic-group');
+const mainTopicSelect = document.getElementById('main-topic-select');
 const yearMinInput = document.getElementById('year-min');
 const yearMaxInput = document.getElementById('year-max');
 const sliderTrack = document.querySelector('.slider-track');
@@ -39,6 +43,17 @@ window.addEventListener('DOMContentLoaded', () => {
   setupYearSliders();
   setupImageUploads();
   setupCsvImporter();
+  
+  // Mathematics Main Topic change
+  mainTopicSelect.addEventListener('change', (e) => {
+    selectedMainTopic = e.target.value;
+    if (selectedMainTopic) {
+      availableTopics = subtopicsGrouped[selectedMainTopic] || [];
+    } else {
+      availableTopics = [];
+    }
+    renderTopicsList();
+  });
   
   // Submit action
   generateBtn.addEventListener('click', generateExamPaper);
@@ -92,6 +107,12 @@ async function loadSubjects() {
 
     subjectSelect.addEventListener('change', (e) => {
       selectedSubject = e.target.value;
+      selectedMainTopic = '';
+      if (selectedSubject === 'Mathematics') {
+        mainTopicGroup.style.display = 'block';
+      } else {
+        mainTopicGroup.style.display = 'none';
+      }
       loadSubjectMetadata(selectedSubject);
     });
   } catch (err) {
@@ -108,7 +129,7 @@ async function loadSubjectMetadata(subject) {
     if (!res.ok) throw new Error('Failed to fetch');
     const data = await res.json();
 
-    availableTopics = data.topics;
+    subtopicsGrouped = data.subtopicsGrouped || {};
     questionsMetadata = data.questions;
 
     // Reset range sliders to subject boundaries
@@ -126,8 +147,21 @@ async function loadSubjectMetadata(subject) {
     sliderTrack.style.background = `linear-gradient(to right, var(--color-accent) 0%, var(--color-accent) 100%)`;
     yearDisplay.textContent = `${min} - ${max}`;
 
-    // Render Topics List
-    renderTopicsList();
+    if (subject === 'Mathematics') {
+      availableTopics = [];
+      mainTopicSelect.innerHTML = '<option value="">-- Choose Main Topic --</option>';
+      data.topics.forEach(topic => {
+        const opt = document.createElement('option');
+        opt.value = topic;
+        opt.textContent = topic;
+        mainTopicSelect.appendChild(opt);
+      });
+      topicsListContainer.innerHTML = '<p class="info-text">Please choose a syllabus topic to view subtopics.</p>';
+      validateAndCalculate();
+    } else {
+      availableTopics = data.topics;
+      renderTopicsList();
+    }
   } catch (err) {
     showToast('Failed to load subject topics.', 'danger');
     topicsListContainer.innerHTML = '<p class="info-text text-danger">Error loading topics.</p>';
@@ -194,9 +228,21 @@ function renderTopicsList() {
 
 // Perform Live Calculations & Validation Checks on Client
 function validateAndCalculate() {
-  if (!selectedSubject || availableTopics.length === 0) {
+  if (!selectedSubject) {
     updateSummaryUI(0, 0, []);
     disableGenerate('Please select a subject first.');
+    return;
+  }
+
+  if (selectedSubject === 'Mathematics' && !selectedMainTopic) {
+    updateSummaryUI(0, 0, []);
+    disableGenerate('Please choose a syllabus topic.');
+    return;
+  }
+
+  if (availableTopics.length === 0) {
+    updateSummaryUI(0, 0, []);
+    disableGenerate('No subtopics found for this topic.');
     return;
   }
 
@@ -215,26 +261,33 @@ function validateAndCalculate() {
     const itemDiv = document.getElementById(`item-${idStr}`);
 
     // Filter metadata to find available questions in selected scope
-    const availableQuestions = questionsMetadata.filter(q => 
-      q.topic === topic && q.year >= yearMin && q.year <= yearMax
-    );
+    const availableQuestions = questionsMetadata.filter(q => {
+      if (selectedSubject === 'Mathematics') {
+        return q.subtopic === topic && q.year >= yearMin && q.year <= yearMax;
+      } else {
+        return q.topic === topic && q.year >= yearMin && q.year <= yearMax;
+      }
+    });
 
     const availableCount = availableQuestions.length;
-    availBadge.textContent = `available: ${availableCount}`;
+    if (availBadge) {
+      availBadge.textContent = `available: ${availableCount}`;
+    }
 
     if (checkbox && checkbox.checked) {
       const requestedQty = parseInt(qtyInput.value, 10) || 0;
       selectedCount++;
 
       // Check overflow error
+      const categoryLabel = selectedSubject === 'Mathematics' ? 'Subtopic' : 'Topic';
       if (requestedQty > availableCount) {
-        itemDiv.classList.add('error-state');
-        validationErrors.push(`Topic "${topic}": requested ${requestedQty} questions, but only ${availableCount} available.`);
+        if (itemDiv) itemDiv.classList.add('error-state');
+        validationErrors.push(`${categoryLabel} "${topic}": requested ${requestedQty} questions, but only ${availableCount} available.`);
       } else if (requestedQty <= 0) {
-        itemDiv.classList.add('error-state');
-        validationErrors.push(`Topic "${topic}": requested count must be at least 1.`);
+        if (itemDiv) itemDiv.classList.add('error-state');
+        validationErrors.push(`${categoryLabel} "${topic}": requested count must be at least 1.`);
       } else {
-        itemDiv.classList.remove('error-state');
+        if (itemDiv) itemDiv.classList.remove('error-state');
         
         // Sum marks of the first N questions (sorted by ID for stability)
         const sortedSubset = [...availableQuestions]

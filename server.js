@@ -62,20 +62,36 @@ app.get('/api/metadata', async (req, res) => {
     );
     const topics = topicRows.map(r => r.topic);
 
+    // Get distinct subtopics grouped by topic
+    const subtopicRows = await db.all(
+      'SELECT DISTINCT topic, subtopic FROM questions WHERE subject = ? ORDER BY subtopic ASC',
+      [subject]
+    );
+    const subtopicsGrouped = {};
+    subtopicRows.forEach(r => {
+      if (!subtopicsGrouped[r.topic]) {
+        subtopicsGrouped[r.topic] = [];
+      }
+      if (r.subtopic) {
+        subtopicsGrouped[r.topic].push(r.subtopic);
+      }
+    });
+
     // Get year range
     const yearRow = await db.get(
       'SELECT MIN(year) as minYear, MAX(year) as maxYear FROM questions WHERE subject = ?',
       [subject]
     );
 
-    // Get lightweight question metadata (id, topic, year, marks) for live calculations
+    // Get lightweight question metadata (id, topic, subtopic, year, marks) for live calculations
     const questionMetaRows = await db.all(
-      'SELECT id, topic, year, marks FROM questions WHERE subject = ? ORDER BY id ASC',
+      'SELECT id, topic, subtopic, year, marks FROM questions WHERE subject = ? ORDER BY id ASC',
       [subject]
     );
 
     res.json({
       topics,
+      subtopicsGrouped,
       minYear: yearRow.minYear || 2020,
       maxYear: yearRow.maxYear || 2026,
       questions: questionMetaRows
@@ -244,10 +260,14 @@ app.post('/api/generate', async (req, res) => {
       const count = parseInt(requestedCount, 10);
       if (isNaN(count) || count <= 0) continue;
 
-      // Retrieve all eligible questions for this topic and year range
+      // Determine query field based on subject (subtopic for Mathematics, topic for others)
+      const useSubtopic = (subject === 'Mathematics');
+      const queryField = useSubtopic ? 'subtopic' : 'topic';
+
+      // Retrieve all eligible questions for this category and year range
       const questions = await db.all(
         `SELECT * FROM questions 
-         WHERE subject = ? AND topic = ? AND year >= ? AND year <= ?`,
+         WHERE subject = ? AND ${queryField} = ? AND year >= ? AND year <= ?`,
         [subject, topic, yearMin, yearMax]
       );
 
