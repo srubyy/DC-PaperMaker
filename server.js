@@ -463,6 +463,7 @@ async function renderPdf(browser, html, subject, documentType, headerImage, foot
 // Helper: Build structured HTML for the exam/mark scheme
 function buildPaperHtml({ subject, title, subtitle, totalMarks, yearMin, yearMax, questions, isMarkScheme }) {
   console.log('buildPaperHtml - subject:', subject);
+  const pageBreakRule = subject === 'Mathematics' ? 'auto' : 'avoid';
   const contentHtml = questions.map((q, index) => {
     if (isMarkScheme) {
       const bodyClass = q.answer_text.includes('[IMAGE:') ? 'item-body' : 'item-body font-mono';
@@ -475,6 +476,7 @@ function buildPaperHtml({ subject, title, subtitle, totalMarks, yearMin, yearMax
           <div class="${bodyClass}">${formatRichText(q.answer_text, subject)}</div>
         </div>`;
     } else {
+      const spacingHtml = subject === 'Mathematics' ? '' : '<div class="item-spacing"></div>';
       return `
         <div class="item-block">
           <div class="item-header">
@@ -482,7 +484,7 @@ function buildPaperHtml({ subject, title, subtitle, totalMarks, yearMin, yearMax
             <span class="item-meta">[${q.marks} Marks | ${q.id}]</span>
           </div>
           <div class="item-body">${formatRichText(q.question_text, subject)}</div>
-          <div class="item-spacing"></div>
+          ${spacingHtml}
         </div>`;
     }
   }).join('');
@@ -568,7 +570,7 @@ function buildPaperHtml({ subject, title, subtitle, totalMarks, yearMin, yearMax
           margin-bottom: 8px;
         }
         .item-block {
-          page-break-inside: avoid;
+          page-break-inside: ${pageBreakRule};
           margin-bottom: 35px;
         }
         .item-header {
@@ -695,7 +697,7 @@ function formatRichText(text, subject) {
       ? 'width: 100%; max-height: none; object-fit: contain; border: none; padding: 0; background-color: #ffffff; box-shadow: none;'
       : 'max-width: 90%; max-height: 250px; object-fit: contain; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px; background-color: #ffffff;';
     const wrapperStyle = isMathSlice
-      ? 'margin: 5px 0; text-align: left; page-break-inside: avoid; border: none; padding: 0; background: transparent; box-shadow: none;'
+      ? 'margin: 5px 0; text-align: left; page-break-inside: auto; border: none; padding: 0; background: transparent; box-shadow: none;'
       : 'margin: 15px 0; text-align: center; page-break-inside: avoid;';
     return `
       <div style="${wrapperStyle}">
