@@ -476,9 +476,98 @@ input:checked + .toggle-slider:before {
 }
 
 .topic-item.error-state {
-  background: var(--color-danger-bg);
   border-color: var(--color-danger-border);
 }
+
+/* Hierarchical Accordion & Nested Syllabus Styles */
+.syllabus-module {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: var(--border-radius-md);
+  margin-bottom: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+.module-header {
+  background: #f8fafc;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid #e2e8f0;
+  user-select: none;
+}
+.expand-toggle {
+  cursor: pointer;
+  font-size: 0.7rem;
+  margin-right: 10px;
+  color: var(--text-muted);
+  width: 14px;
+  text-align: center;
+}
+.module-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+.module-checkbox {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+}
+.subtopics-list {
+  padding: 5px 10px;
+}
+.subtopic-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px;
+  border-bottom: 1px solid #f1f5f9;
+  border-radius: var(--border-radius-sm);
+}
+.subtopic-item:last-child {
+  border-bottom: none;
+}
+.subtopic-item.selected {
+  background-color: #f5f3ff;
+}
+.subtopic-item.error-state {
+  background-color: var(--color-danger-bg);
+  border: 1px solid var(--color-danger-border);
+}
+.subtopic-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  flex-grow: 1;
+  user-select: none;
+}
+.subtopic-checkbox {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  accent-color: var(--color-accent);
+}
+.subtopic-name {
+  font-weight: 500;
+  color: var(--text-secondary);
+  font-size: 0.825rem;
+}
+.subtopic-avail-badge {
+  font-size: 0.675rem;
+  color: var(--text-muted);
+  font-weight: normal;
+}
+.subtopic-control {
+  display: flex;
+  align-items: center;
+}
+
 
 .topic-checkbox-label {
   display: flex;

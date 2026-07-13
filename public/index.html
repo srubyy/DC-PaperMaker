@@ -27,22 +27,20 @@
         <h2 class="section-title">Configure Examination</h2>
         
         <form id="generator-form" onsubmit="event.preventDefault();">
+          <!-- Topics Selection List -->
+          <div class="form-group topics-section">
+            <label>Select Topics &amp; Question Counts</label>
+            <div id="topics-list-container" class="topics-list">
+              <p class="info-text">Please select a subject to load topics.</p>
+            </div>
+          </div>
+
           <!-- Subject Selector -->
           <div class="form-group">
             <label for="subject-select">Select Subject</label>
             <div class="select-wrapper">
               <select id="subject-select" required>
                 <option value="" disabled selected>Loading subjects...</option>
-              </select>
-            </div>
-          </div>
-
-          <!-- Main Topic Selector (Shown for Mathematics only) -->
-          <div class="form-group" id="main-topic-group" style="display: none;">
-            <label for="main-topic-select">Select Syllabus Area</label>
-            <div class="select-wrapper">
-              <select id="main-topic-select">
-                <option value="">-- Choose Main Topic --</option>
               </select>
             </div>
           </div>
@@ -93,14 +91,6 @@
                 </div>
                 <div class="preview-area" id="footer-preview"></div>
               </div>
-            </div>
-          </div>
-
-          <!-- Topics Selection List -->
-          <div class="form-group topics-section">
-            <label>Select Topics &amp; Question Counts</label>
-            <div id="topics-list-container" class="topics-list">
-              <p class="info-text">Please select a subject to load topics.</p>
             </div>
           </div>
         </form>

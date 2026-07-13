@@ -10,6 +10,9 @@ async function main() {
   const browser = await puppeteer.launch({ headless: true });
   const page = await browser.newPage();
   
+  page.on('console', msg => console.log('BROWSER CONSOLE:', msg.text()));
+  page.on('pageerror', err => console.log('BROWSER PAGE ERROR:', err.message));
+  
   // Set download behavior
   const downloadPath = path.join(__dirname, 'downloads');
   if (!fs.existsSync(downloadPath)) {
@@ -42,24 +45,6 @@ async function main() {
   // Take screenshot after subject select
   await page.screenshot({ path: path.join(__dirname, 'after_subject_select.png') });
   console.log("Saved after_subject_select.png screenshot");
-
-  // Check if main-topic-group is visible
-  const isMainTopicVisible = await page.evaluate(() => {
-    const el = document.getElementById('main-topic-group');
-    return el && el.style.display !== 'none';
-  });
-  console.log(`Is Syllabus Area dropdown visible: ${isMainTopicVisible}`);
-
-  // Select main topic 'Number'
-  console.log("Selecting Syllabus Area: Number...");
-  await page.select('#main-topic-select', 'Number');
-
-  // Wait 1 second for subtopics to render
-  await new Promise(resolve => setTimeout(resolve, 1000));
-
-  // Take screenshot after topic select
-  await page.screenshot({ path: path.join(__dirname, 'after_topic_select.png') });
-  console.log("Saved after_topic_select.png screenshot");
 
   // Check if subtopics checkbox for E1.8 exists and check it
   const e18CheckboxId = 'chk-E1_8__Standard_form';

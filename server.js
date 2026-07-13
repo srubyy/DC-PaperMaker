@@ -239,7 +239,7 @@ app.post('/api/import', upload.single('file'), async (req, res) => {
 app.post('/api/generate', async (req, res) => {
   const {
     subject,
-    topicSelections, // e.g. { "Chemical Bonding": 2, "Organic Chemistry": 1 }
+    ExamBlueprint, // [{ topic, subtopic, count }]
     yearMin,
     yearMax,
     randomize, // boolean
@@ -247,7 +247,7 @@ app.post('/api/generate', async (req, res) => {
     footerImage  // base64 string or null
   } = req.body;
 
-  if (!subject || !topicSelections || typeof topicSelections !== 'object') {
+  if (!subject || !ExamBlueprint || !Array.isArray(ExamBlueprint)) {
     return res.status(400).json({ error: 'Missing or invalid parameters' });
   }
 
@@ -255,26 +255,22 @@ app.post('/api/generate', async (req, res) => {
     const db = await getDb();
     const selectedQuestions = [];
 
-    // Query questions topic by topic
-    for (const [topic, requestedCount] of Object.entries(topicSelections)) {
-      const count = parseInt(requestedCount, 10);
+    // Query questions topic by topic according to ExamBlueprint
+    for (const item of ExamBlueprint) {
+      const count = parseInt(item.count, 10);
       if (isNaN(count) || count <= 0) continue;
-
-      // Determine query field based on subject (subtopic for Mathematics, topic for others)
-      const useSubtopic = (subject === 'Mathematics');
-      const queryField = useSubtopic ? 'subtopic' : 'topic';
 
       // Retrieve all eligible questions for this category and year range
       const questions = await db.all(
         `SELECT * FROM questions 
-         WHERE subject = ? AND ${queryField} = ? AND year >= ? AND year <= ?`,
-        [subject, topic, yearMin, yearMax]
+         WHERE subject = ? AND topic = ? AND subtopic = ? AND year >= ? AND year <= ?`,
+        [subject, item.topic, item.subtopic, yearMin, yearMax]
       );
 
       // Validate question count matches request
       if (questions.length < count) {
         return res.status(400).json({
-          error: `Only ${questions.length} questions available for "${topic}" in years ${yearMin}-${yearMax}, but you requested ${count}.`
+          error: `Only ${questions.length} questions available for "${item.subtopic}" in years ${yearMin}-${yearMax}, but you requested ${count}.`
         });
       }
 
@@ -293,7 +289,7 @@ app.post('/api/generate', async (req, res) => {
 
       // Slice the requested number of questions
       selectedQuestions.push({
-        topic,
+        topic: item.subtopic,
         questions: selectedForTopic.slice(0, count)
       });
     }

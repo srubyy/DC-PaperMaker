@@ -3,14 +3,11 @@ let selectedSubject = '';
 let questionsMetadata = []; // [{ id, topic, subtopic, year, marks }]
 let availableTopics = [];
 let subtopicsGrouped = {};
-let selectedMainTopic = '';
 let headerBase64 = null;
 let footerBase64 = null;
 
 // DOM Elements
 const subjectSelect = document.getElementById('subject-select');
-const mainTopicGroup = document.getElementById('main-topic-group');
-const mainTopicSelect = document.getElementById('main-topic-select');
 const yearMinInput = document.getElementById('year-min');
 const yearMaxInput = document.getElementById('year-max');
 const sliderTrack = document.querySelector('.slider-track');
@@ -43,17 +40,6 @@ window.addEventListener('DOMContentLoaded', () => {
   setupYearSliders();
   setupImageUploads();
   setupCsvImporter();
-  
-  // Mathematics Main Topic change
-  mainTopicSelect.addEventListener('change', (e) => {
-    selectedMainTopic = e.target.value;
-    if (selectedMainTopic) {
-      availableTopics = subtopicsGrouped[selectedMainTopic] || [];
-    } else {
-      availableTopics = [];
-    }
-    renderTopicsList();
-  });
   
   // Submit action
   generateBtn.addEventListener('click', generateExamPaper);
@@ -107,12 +93,6 @@ async function loadSubjects() {
 
     subjectSelect.addEventListener('change', (e) => {
       selectedSubject = e.target.value;
-      selectedMainTopic = '';
-      if (selectedSubject === 'Mathematics') {
-        mainTopicGroup.style.display = 'block';
-      } else {
-        mainTopicGroup.style.display = 'none';
-      }
       loadSubjectMetadata(selectedSubject);
     });
   } catch (err) {
@@ -147,77 +127,157 @@ async function loadSubjectMetadata(subject) {
     sliderTrack.style.background = `linear-gradient(to right, var(--color-accent) 0%, var(--color-accent) 100%)`;
     yearDisplay.textContent = `${min} - ${max}`;
 
-    if (subject === 'Mathematics') {
-      availableTopics = [];
-      mainTopicSelect.innerHTML = '<option value="">-- Choose Main Topic --</option>';
-      data.topics.forEach(topic => {
-        const opt = document.createElement('option');
-        opt.value = topic;
-        opt.textContent = topic;
-        mainTopicSelect.appendChild(opt);
-      });
-      topicsListContainer.innerHTML = '<p class="info-text">Please choose a syllabus topic to view subtopics.</p>';
-      validateAndCalculate();
-    } else {
-      availableTopics = data.topics;
-      renderTopicsList();
-    }
+    availableTopics = data.topics;
+    renderNestedTopicsList();
   } catch (err) {
     showToast('Failed to load subject topics.', 'danger');
     topicsListContainer.innerHTML = '<p class="info-text text-danger">Error loading topics.</p>';
   }
 }
 
-// Render Checkboxes and Quantities for Topics
-function renderTopicsList() {
-  if (availableTopics.length === 0) {
+// Render Checkboxes and Quantities for Nested Syllabus Areas (Tier 1 & Tier 2)
+function renderNestedTopicsList() {
+  const topics = Object.keys(subtopicsGrouped);
+  if (topics.length === 0) {
     topicsListContainer.innerHTML = '<p class="info-text">No topics found for this subject.</p>';
     return;
   }
 
   topicsListContainer.innerHTML = '';
-  availableTopics.forEach(topic => {
-    const item = document.createElement('div');
-    item.className = 'topic-item';
-    item.id = `item-${cleanId(topic)}`;
-
-    item.innerHTML = `
-      <label class="topic-checkbox-label" for="chk-${cleanId(topic)}">
-        <input type="checkbox" id="chk-${cleanId(topic)}" data-topic="${topic}" class="topic-checkbox">
-        <div style="display: flex; flex-direction: column;">
-          <span class="topic-name">${topic}</span>
-          <span class="topic-avail-badge" id="avail-${cleanId(topic)}">available: 0</span>
-        </div>
+  
+  topics.forEach(topic => {
+    const topicId = cleanId(topic);
+    const subtopics = subtopicsGrouped[topic] || [];
+    
+    const moduleDiv = document.createElement('div');
+    moduleDiv.className = 'syllabus-module';
+    moduleDiv.id = `module-${topicId}`;
+    
+    // Header for Syllabus Module (Tier 1)
+    const headerDiv = document.createElement('div');
+    headerDiv.className = 'module-header';
+    headerDiv.innerHTML = `
+      <span class="expand-toggle" data-module-id="${topicId}">▼</span>
+      <label class="module-label">
+        <input type="checkbox" class="module-checkbox" data-module="${topic}" id="mod-chk-${topicId}">
+        <span class="module-name">${topic}</span>
       </label>
-      <div class="topic-control">
-        <input type="number" id="qty-${cleanId(topic)}" data-topic="${topic}" class="qty-input" min="1" value="1" disabled>
-      </div>
     `;
-
-    topicsListContainer.appendChild(item);
+    
+    // Sub-topics container (Tier 2)
+    const subListDiv = document.createElement('div');
+    subListDiv.className = 'subtopics-list';
+    subListDiv.id = `sublist-${topicId}`;
+    subListDiv.style.display = 'block'; // expanded by default
+    
+    subtopics.forEach(sub => {
+      const subId = cleanId(sub);
+      const subtopicItem = document.createElement('div');
+      subtopicItem.className = 'subtopic-item';
+      subtopicItem.id = `item-${subId}`;
+      subtopicItem.innerHTML = `
+        <label class="subtopic-checkbox-label" for="chk-${subId}">
+          <input type="checkbox" id="chk-${subId}" data-module="${topic}" data-subtopic="${sub}" class="subtopic-checkbox">
+          <div style="display: flex; flex-direction: column;">
+            <span class="subtopic-name">${sub}</span>
+            <span class="subtopic-avail-badge" id="avail-${subId}">available: 0</span>
+          </div>
+        </label>
+        <div class="subtopic-control">
+          <input type="number" id="qty-${subId}" data-module="${topic}" data-subtopic="${sub}" class="qty-input" min="1" value="1" disabled>
+        </div>
+      `;
+      subListDiv.appendChild(subtopicItem);
+    });
+    
+    moduleDiv.appendChild(headerDiv);
+    moduleDiv.appendChild(subListDiv);
+    topicsListContainer.appendChild(moduleDiv);
   });
 
-  // Attach Event Listeners to New Controls
-  document.querySelectorAll('.topic-checkbox').forEach(chk => {
-    chk.addEventListener('change', (e) => {
-      const topic = e.target.dataset.topic;
-      const idStr = cleanId(topic);
-      const qtyInput = document.getElementById(`qty-${idStr}`);
-      const itemDiv = document.getElementById(`item-${idStr}`);
+  // Attach Toggle Listeners
+  document.querySelectorAll('.expand-toggle').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const modId = e.target.dataset.moduleId;
+      const subList = document.getElementById(`sublist-${modId}`);
+      if (subList.style.display === 'none') {
+        subList.style.display = 'block';
+        e.target.textContent = '▼';
+      } else {
+        subList.style.display = 'none';
+        e.target.textContent = '▶';
+      }
+    });
+  });
 
-      qtyInput.disabled = !e.target.checked;
+  // Attach Module Checkbox (Tier 1) Listeners - Toggles all sub-topics under it
+  document.querySelectorAll('.module-checkbox').forEach(chk => {
+    chk.addEventListener('change', (e) => {
+      const isChecked = e.target.checked;
+      const topic = e.target.dataset.module;
+      const topicId = cleanId(topic);
+      const subList = document.getElementById(`sublist-${topicId}`);
       
-      if (e.target.checked) {
+      subList.querySelectorAll('.subtopic-checkbox').forEach(subChk => {
+        subChk.checked = isChecked;
+        const subId = cleanId(subChk.dataset.subtopic);
+        const qtyInput = document.getElementById(`qty-${subId}`);
+        const itemDiv = document.getElementById(`item-${subId}`);
+        
+        qtyInput.disabled = !isChecked;
+        if (isChecked) {
+          itemDiv.classList.add('selected');
+        } else {
+          itemDiv.classList.remove('selected');
+          itemDiv.classList.remove('error-state');
+        }
+      });
+      
+      validateAndCalculate();
+    });
+  });
+
+  // Attach Sub-Topic Checkbox (Tier 2) Listeners
+  document.querySelectorAll('.subtopic-checkbox').forEach(chk => {
+    chk.addEventListener('change', (e) => {
+      const isChecked = e.target.checked;
+      const subtopic = e.target.dataset.subtopic;
+      const subId = cleanId(subtopic);
+      const qtyInput = document.getElementById(`qty-${subId}`);
+      const itemDiv = document.getElementById(`item-${subId}`);
+      
+      qtyInput.disabled = !isChecked;
+      if (isChecked) {
         itemDiv.classList.add('selected');
       } else {
         itemDiv.classList.remove('selected');
         itemDiv.classList.remove('error-state');
+      }
+
+      // Check if all subtopics in this module are checked/unchecked to update parent checkbox
+      const topic = e.target.dataset.module;
+      const topicId = cleanId(topic);
+      const parentChk = document.getElementById(`mod-chk-${topicId}`);
+      const subList = document.getElementById(`sublist-${topicId}`);
+      const totalSubs = subList.querySelectorAll('.subtopic-checkbox').length;
+      const checkedSubs = subList.querySelectorAll('.subtopic-checkbox:checked').length;
+      
+      if (checkedSubs === totalSubs) {
+        parentChk.checked = true;
+        parentChk.indeterminate = false;
+      } else if (checkedSubs === 0) {
+        parentChk.checked = false;
+        parentChk.indeterminate = false;
+      } else {
+        parentChk.checked = false;
+        parentChk.indeterminate = true;
       }
       
       validateAndCalculate();
     });
   });
 
+  // Attach Quantity Input (Tier 3) Listeners
   document.querySelectorAll('.qty-input').forEach(input => {
     input.addEventListener('input', validateAndCalculate);
   });
@@ -234,15 +294,10 @@ function validateAndCalculate() {
     return;
   }
 
-  if (selectedSubject === 'Mathematics' && !selectedMainTopic) {
+  const subtopicCheckboxes = document.querySelectorAll('.subtopic-checkbox');
+  if (subtopicCheckboxes.length === 0) {
     updateSummaryUI(0, 0, []);
-    disableGenerate('Please choose a syllabus topic.');
-    return;
-  }
-
-  if (availableTopics.length === 0) {
-    updateSummaryUI(0, 0, []);
-    disableGenerate('No subtopics found for this topic.');
+    disableGenerate('No subtopics loaded.');
     return;
   }
 
@@ -253,20 +308,17 @@ function validateAndCalculate() {
   let validationErrors = [];
   let summaryDetails = [];
 
-  availableTopics.forEach(topic => {
-    const idStr = cleanId(topic);
-    const checkbox = document.getElementById(`chk-${idStr}`);
-    const qtyInput = document.getElementById(`qty-${idStr}`);
-    const availBadge = document.getElementById(`avail-${idStr}`);
-    const itemDiv = document.getElementById(`item-${idStr}`);
+  subtopicCheckboxes.forEach(chk => {
+    const topic = chk.dataset.module;
+    const sub = chk.dataset.subtopic;
+    const subId = cleanId(sub);
+    const qtyInput = document.getElementById(`qty-${subId}`);
+    const availBadge = document.getElementById(`avail-${subId}`);
+    const itemDiv = document.getElementById(`item-${subId}`);
 
     // Filter metadata to find available questions in selected scope
     const availableQuestions = questionsMetadata.filter(q => {
-      if (selectedSubject === 'Mathematics') {
-        return q.subtopic === topic && q.year >= yearMin && q.year <= yearMax;
-      } else {
-        return q.topic === topic && q.year >= yearMin && q.year <= yearMax;
-      }
+      return q.topic === topic && q.subtopic === sub && q.year >= yearMin && q.year <= yearMax;
     });
 
     const availableCount = availableQuestions.length;
@@ -274,18 +326,17 @@ function validateAndCalculate() {
       availBadge.textContent = `available: ${availableCount}`;
     }
 
-    if (checkbox && checkbox.checked) {
+    if (chk.checked) {
       const requestedQty = parseInt(qtyInput.value, 10) || 0;
       selectedCount++;
 
       // Check overflow error
-      const categoryLabel = selectedSubject === 'Mathematics' ? 'Subtopic' : 'Topic';
       if (requestedQty > availableCount) {
         if (itemDiv) itemDiv.classList.add('error-state');
-        validationErrors.push(`${categoryLabel} "${topic}": requested ${requestedQty} questions, but only ${availableCount} available.`);
+        validationErrors.push(`Sub-Topic "${sub}": requested ${requestedQty} questions, but only ${availableCount} available.`);
       } else if (requestedQty <= 0) {
         if (itemDiv) itemDiv.classList.add('error-state');
-        validationErrors.push(`${categoryLabel} "${topic}": requested count must be at least 1.`);
+        validationErrors.push(`Sub-Topic "${sub}": requested count must be at least 1.`);
       } else {
         if (itemDiv) itemDiv.classList.remove('error-state');
         
@@ -297,7 +348,7 @@ function validateAndCalculate() {
         const subsetMarks = sortedSubset.reduce((sum, q) => sum + q.marks, 0);
         totalMarks += subsetMarks;
 
-        summaryDetails.push({ topic, qty: requestedQty });
+        summaryDetails.push({ topic: sub, qty: requestedQty });
       }
     } else {
       if (itemDiv) itemDiv.classList.remove('error-state');
@@ -309,17 +360,12 @@ function validateAndCalculate() {
 
   // Form level checks
   if (selectedCount === 0) {
-    disableGenerate('Select at least one topic and request at least 1 question.');
-    return;
+    disableGenerate('Please select at least one subtopic and count.');
+  } else if (validationErrors.length > 0) {
+    disableGenerate(validationErrors[0]);
+  } else {
+    enableGenerate();
   }
-
-  if (validationErrors.length > 0) {
-    disableGenerate(validationErrors[0]); // Display first validation error
-    return;
-  }
-
-  // If valid, enable generate button
-  enableGenerate();
 }
 
 // Update Summary Panel UI
@@ -363,26 +409,26 @@ async function generateExamPaper() {
   const btnText = generateBtn.querySelector('.btn-text');
 
   try {
-    // Collect topic selections
-    const topicSelections = {};
-    let activeSelection = false;
-
-    availableTopics.forEach(topic => {
-      const idStr = cleanId(topic);
-      const checkbox = document.getElementById(`chk-${idStr}`);
-      const qtyInput = document.getElementById(`qty-${idStr}`);
-
-      if (checkbox && checkbox.checked) {
-        const qty = parseInt(qtyInput.value, 10);
-        if (qty > 0) {
-          topicSelections[topic] = qty;
-          activeSelection = true;
-        }
+    // Collect selected subtopics into ExamBlueprint
+    const ExamBlueprint = [];
+    document.querySelectorAll('.subtopic-checkbox:checked').forEach(chk => {
+      const topic = chk.dataset.module;
+      const subtopic = chk.dataset.subtopic;
+      const subId = cleanId(subtopic);
+      const qtyInput = document.getElementById(`qty-${subId}`);
+      const qty = parseInt(qtyInput.value, 10) || 0;
+      
+      if (qty > 0) {
+        ExamBlueprint.push({
+          topic,
+          subtopic,
+          count: qty
+        });
       }
     });
 
-    if (!activeSelection) {
-      showToast('Please select at least one topic.', 'danger');
+    if (ExamBlueprint.length === 0) {
+      showToast('Please select at least one subtopic.', 'danger');
       return;
     }
 
@@ -393,7 +439,7 @@ async function generateExamPaper() {
 
     const payload = {
       subject: selectedSubject,
-      topicSelections,
+      ExamBlueprint,
       yearMin: parseInt(yearMinInput.value),
       yearMax: parseInt(yearMaxInput.value),
       randomize: randomizeToggle.checked,
