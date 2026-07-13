@@ -462,14 +462,14 @@ async function renderPdf(browser, html, subject, documentType, headerImage, foot
 
 // Helper: Build structured HTML for the exam/mark scheme
 function buildPaperHtml({ subject, title, subtitle, totalMarks, yearMin, yearMax, questions, isMarkScheme }) {
-  console.log('buildPaperHtml - subject:', subject);
   const pageBreakRule = subject === 'Mathematics' ? 'auto' : 'avoid';
   const contentHtml = questions.map((q, index) => {
     if (isMarkScheme) {
       const bodyClass = q.answer_text.includes('[IMAGE:') ? 'item-body' : 'item-body font-mono';
+      const headerStyle = subject === 'Mathematics' ? 'style="margin-bottom: 0px;"' : '';
       return `
         <div class="item-block">
-          <div class="item-header">
+          <div class="item-header" ${headerStyle}>
             <span class="item-title">Question ${index + 1} Mark Scheme</span>
             <span class="item-meta">[${q.marks} Marks | ${q.id}]</span>
           </div>
@@ -477,9 +477,10 @@ function buildPaperHtml({ subject, title, subtitle, totalMarks, yearMin, yearMax
         </div>`;
     } else {
       const spacingHtml = subject === 'Mathematics' ? '' : '<div class="item-spacing"></div>';
+      const headerStyle = subject === 'Mathematics' ? 'style="margin-bottom: 0px;"' : '';
       return `
         <div class="item-block">
-          <div class="item-header">
+          <div class="item-header" ${headerStyle}>
             <span class="item-title">Question ${index + 1}</span>
             <span class="item-meta">[${q.marks} Marks | ${q.id}]</span>
           </div>
@@ -705,7 +706,7 @@ function formatRichText(text, subject) {
       }).join('');
       consecutiveImages = [];
       return `
-        <div style="margin: 5px 0; line-height: 0; font-size: 0; text-align: left; page-break-inside: auto; border: none; padding: 0; background: transparent; box-shadow: none;">
+        <div style="margin-top: -15px; margin-bottom: 5px; line-height: 0; font-size: 0; text-align: left; page-break-inside: auto; border: none; padding: 0; background: transparent; box-shadow: none;">
           ${imgTags}
         </div>`;
     } else {

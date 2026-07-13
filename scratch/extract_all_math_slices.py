@@ -381,8 +381,8 @@ def parse_pdf_file(filename):
                         
                     # 1. CROP QUESTION SLICE IMAGE
                     fitz_page = doc[page_idx]
-                    # Page width constraint: crop inside page frame borders (x=42 to 553) to exclude outer border lines but keep full diagrams/text
-                    rect_q = fitz.Rect(42, max(52, y0), 553, min(738, y1))
+                    # Page width constraint: crop inside page frame borders (x=68 to 553) to exclude outer border lines and margin question numbers
+                    rect_q = fitz.Rect(68, max(52, y0), 553, min(738, y1))
                     pix_q = fitz_page.get_pixmap(clip=rect_q, dpi=150)
                     
                     # Slice the QP image into 80px high horizontal strips for dynamic page breaks
