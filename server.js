@@ -355,7 +355,9 @@ app.post('/api/generate', async (req, res) => {
       yearMin,
       yearMax,
       questions: processedQuestions,
-      isMarkScheme: false
+      isMarkScheme: false,
+      headerImage,
+      footerImage
     });
 
     // Build HTML for Mark Scheme
@@ -367,7 +369,9 @@ app.post('/api/generate', async (req, res) => {
       yearMin,
       yearMax,
       questions: processedQuestions,
-      isMarkScheme: true
+      isMarkScheme: true,
+      headerImage,
+      footerImage
     });
 
     // Render PDFs using Puppeteer
@@ -461,7 +465,7 @@ async function renderPdf(browser, html, subject, documentType, headerImage, foot
 }
 
 // Helper: Build structured HTML for the exam/mark scheme
-function buildPaperHtml({ subject, title, subtitle, totalMarks, yearMin, yearMax, questions, isMarkScheme }) {
+function buildPaperHtml({ subject, title, subtitle, totalMarks, yearMin, yearMax, questions, isMarkScheme, headerImage, footerImage }) {
   const pageBreakRule = 'avoid';
   const contentHtml = questions.map((q, index) => {
     if (isMarkScheme) {
@@ -646,6 +650,8 @@ function buildPaperHtml({ subject, title, subtitle, totalMarks, yearMin, yearMax
       </style>
     </head>
     <body>
+      ${headerImage ? `<img src="${headerImage}" style="display: none;" />` : ''}
+      ${footerImage ? `<img src="${footerImage}" style="display: none;" />` : ''}
       <div class="watermark">Direction Classes</div>
       <div class="cover-page">
         <div class="cover-logo">Direction Classes</div>
