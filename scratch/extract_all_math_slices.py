@@ -349,8 +349,8 @@ def parse_pdf_file(filename):
                         
                     # 1. CROP QUESTION SLICE IMAGE
                     fitz_page = doc[page_idx]
-                    # Page width constraint: crop inside page frame borders (x=68 to 545) and exclude margin question numbers
-                    rect_q = fitz.Rect(68, max(95, y0), 545, min(740, y1))
+                    # Page width constraint: crop inside page frame borders (x=68 to 532) and exclude margin question numbers
+                    rect_q = fitz.Rect(68, max(95, y0), 532, min(728, y1))
                     
                     pix_q = fitz_page.get_pixmap(clip=rect_q, dpi=150)
                     q_filename = f"q_{year}_{safe_comp}_q{q_num}.jpg"
@@ -363,8 +363,8 @@ def parse_pdf_file(filename):
                         ms_page_idx, ms_y0, ms_y1, ms_x0 = consolidated_ms[comp][q_num]
                         fitz_ms_page = doc[ms_page_idx]
                         
-                        # Crop from ms_x0+1 to 542 to capture columns 2,3,4 inside the table border (excluding column 1)
-                        rect_ms = fitz.Rect(ms_x0 + 1, max(70, ms_y0 - 2), 542, min(750, ms_y1 + 2))
+                        # Crop from ms_x0+1 to 535 to capture columns 2,3,4 inside the table border (excluding column 1 and right frame line)
+                        rect_ms = fitz.Rect(ms_x0 + 1, max(70, ms_y0 - 2), 535, min(750, ms_y1 + 2))
                         pix_ms = fitz_ms_page.get_pixmap(clip=rect_ms, dpi=150)
                         
                         ms_filename = f"ms_{year}_{safe_comp}_q{q_num}.jpg"

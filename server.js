@@ -462,6 +462,7 @@ async function renderPdf(browser, html, subject, documentType, headerImage, foot
 
 // Helper: Build structured HTML for the exam/mark scheme
 function buildPaperHtml({ subject, title, subtitle, totalMarks, yearMin, yearMax, questions, isMarkScheme }) {
+  console.log('buildPaperHtml - subject:', subject);
   const contentHtml = questions.map((q, index) => {
     if (isMarkScheme) {
       const bodyClass = q.answer_text.includes('[IMAGE:') ? 'item-body' : 'item-body font-mono';
@@ -471,7 +472,7 @@ function buildPaperHtml({ subject, title, subtitle, totalMarks, yearMin, yearMax
             <span class="item-title">Question ${index + 1} Mark Scheme</span>
             <span class="item-meta">[${q.marks} Marks | ${q.id}]</span>
           </div>
-          <div class="${bodyClass}">${formatRichText(q.answer_text)}</div>
+          <div class="${bodyClass}">${formatRichText(q.answer_text, subject)}</div>
         </div>`;
     } else {
       return `
@@ -480,7 +481,7 @@ function buildPaperHtml({ subject, title, subtitle, totalMarks, yearMin, yearMax
             <span class="item-title">Question ${index + 1}</span>
             <span class="item-meta">[${q.marks} Marks | ${q.id}]</span>
           </div>
-          <div class="item-body">${formatRichText(q.question_text)}</div>
+          <div class="item-body">${formatRichText(q.question_text, subject)}</div>
           <div class="item-spacing"></div>
         </div>`;
     }
@@ -680,20 +681,21 @@ function escapeHtml(unsafe) {
 }
 
 // Helper: Format question and answer texts to support embedded [IMAGE: url] placeholders
-function formatRichText(text) {
+function formatRichText(text, subject) {
   let escaped = escapeHtml(text);
   
   // Parse [IMAGE: url] placeholders and replace with structured, print-safe HTML images
   const imageRegex = /\[IMAGE:\s*([^\]\s]+)\]/gi;
   escaped = escaped.replace(imageRegex, (match, url) => {
     const cleanUrl = url.replace(/&amp;/g, '&');
-    const isMathSlice = cleanUrl.includes('math_0580');
+    // Identify Math slices using subject parameter or url structure
+    const isMathSlice = (subject === 'Mathematics') || cleanUrl.includes('math_0580');
     // If it's a Mathematics visual slice, expand to full width and remove height limit to make it readable.
     const imgStyle = isMathSlice
-      ? 'width: 100%; max-height: none; object-fit: contain; border: none; padding: 0; background-color: #ffffff;'
+      ? 'width: 100%; max-height: none; object-fit: contain; border: none; padding: 0; background-color: #ffffff; box-shadow: none;'
       : 'max-width: 90%; max-height: 250px; object-fit: contain; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px; background-color: #ffffff;';
     const wrapperStyle = isMathSlice
-      ? 'margin: 5px 0; text-align: left; page-break-inside: avoid;'
+      ? 'margin: 5px 0; text-align: left; page-break-inside: avoid; border: none; padding: 0; background: transparent; box-shadow: none;'
       : 'margin: 15px 0; text-align: center; page-break-inside: avoid;';
     return `
       <div style="${wrapperStyle}">
@@ -757,7 +759,9 @@ async function replaceImagePlaceholdersWithBase64(text) {
     if (imageUrl.startsWith('/')) {
       const localPath = path.join(__dirname, 'public', imageUrl);
       if (fs.existsSync(localPath)) {
-        const mimeType = localPath.endsWith('.svg') ? 'image/svg+xml' : 'image/png';
+        const mimeType = localPath.endsWith('.svg') 
+          ? 'image/svg+xml' 
+          : (localPath.endsWith('.jpg') || localPath.endsWith('.jpeg') ? 'image/jpeg' : 'image/png');
         const fileBuffer = fs.readFileSync(localPath);
         base64Url = `data:${mimeType};base64,${fileBuffer.toString('base64')}`;
       }
