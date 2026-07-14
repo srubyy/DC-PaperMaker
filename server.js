@@ -242,19 +242,13 @@ async function getBrowser() {
   const isVercel = !!process.env.VERCEL;
 
   if (isVercel) {
-    const chromiumModule = await import('@sparticuz/chromium');
+    const chromiumModule = await import('@sparticuz/chromium-min');
     const chromium = chromiumModule.default || chromiumModule;
     
     const puppeteerCoreModule = await import('puppeteer-core');
     const puppeteerCore = puppeteerCoreModule.default || puppeteerCoreModule;
 
-    const executablePath = await chromium.executablePath();
-    if (executablePath) {
-      const execDir = path.dirname(executablePath);
-      process.env.LD_LIBRARY_PATH = process.env.LD_LIBRARY_PATH 
-        ? `${process.env.LD_LIBRARY_PATH}:${execDir}` 
-        : execDir;
-    }
+    const executablePath = await chromium.executablePath('https://github.com/Sparticuz/chromium/releases/download/v123.0.1/chromium-v123.0.1-pack.tar');
 
     return await puppeteerCore.launch({
       args: chromium.args,
