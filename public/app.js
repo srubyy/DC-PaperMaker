@@ -453,7 +453,7 @@ async function generateExamPaper() {
 
     if (res.status === 401) {
       showToast('Authentication required. Please log in or register to generate exam papers.', 'danger');
-      openAuthModal('login');
+      showAuthScreen('login');
       // Reset loading state
       generateBtn.disabled = false;
       spinner.classList.add('hidden');
@@ -667,8 +667,8 @@ function showToast(message, type = 'info') {
 let currentUser = null;
 
 // DOM Selectors for Auth
-const authModal = document.getElementById('auth-modal');
-const closeAuthBtn = document.getElementById('close-auth-btn');
+const appAuthView = document.getElementById('app-auth-view');
+const appDashboardView = document.getElementById('app-dashboard-view');
 const authLoginView = document.getElementById('auth-login-view');
 const authRegisterView = document.getElementById('auth-register-view');
 const authForgotView = document.getElementById('auth-forgot-view');
@@ -684,16 +684,18 @@ const registerSubmitBtn = document.getElementById('register-submit-btn');
 
 // Check Current User Session
 async function checkAuth() {
-  const authWidget = document.getElementById('auth-widget');
   try {
     const res = await fetch('/api/auth/me');
     if (res.ok) {
       currentUser = await res.json();
+      hideAuthScreen();
     } else {
       currentUser = null;
+      showAuthScreen('login');
     }
   } catch (err) {
     currentUser = null;
+    showAuthScreen('login');
   }
   updateAuthWidget();
 }
@@ -715,26 +717,22 @@ function updateAuthWidget() {
 
     document.getElementById('logout-btn').addEventListener('click', handleLogout);
   } else {
-    authWidget.innerHTML = `
-      <button class="btn btn-outline" id="show-login-btn">Log In</button>
-      <button class="btn btn-primary" id="show-register-btn">Register</button>
-    `;
-
-    document.getElementById('show-login-btn').addEventListener('click', () => openAuthModal('login'));
-    document.getElementById('show-register-btn').addEventListener('click', () => openAuthModal('register'));
+    authWidget.innerHTML = '';
   }
 }
 
-// Open Auth Modal Overlay
-function openAuthModal(view = 'login') {
-  authModal.classList.remove('hidden');
+// Show Auth Screen Overlay
+function showAuthScreen(view = 'login') {
+  appAuthView.classList.remove('hidden');
+  appDashboardView.classList.add('hidden');
   resetAuthForms();
   showAuthView(view);
 }
 
-// Close Auth Modal
-function closeAuthModal() {
-  authModal.classList.add('hidden');
+// Hide Auth Screen and Show Dashboard
+function hideAuthScreen() {
+  appAuthView.classList.add('hidden');
+  appDashboardView.classList.remove('hidden');
 }
 
 // Switch between views
@@ -773,12 +771,6 @@ function resetAuthForms() {
 
 // Configure Event Triggers
 function setupAuthEventListeners() {
-  // Close triggers
-  closeAuthBtn.addEventListener('click', closeAuthModal);
-  authModal.addEventListener('click', (e) => {
-    if (e.target === authModal) closeAuthModal();
-  });
-
   // Switchers
   document.getElementById('go-to-register').addEventListener('click', (e) => {
     e.preventDefault();
@@ -891,7 +883,7 @@ async function handleLogin(e) {
 
     currentUser = data;
     updateAuthWidget();
-    closeAuthModal();
+    hideAuthScreen();
     showToast('Logged in successfully!', 'success');
   } catch (err) {
     errorBox.textContent = err.message;
@@ -929,7 +921,7 @@ async function handleRegister(e) {
 
     currentUser = data;
     updateAuthWidget();
-    closeAuthModal();
+    hideAuthScreen();
     showToast('Account registered successfully!', 'success');
   } catch (err) {
     errorBox.textContent = err.message;

@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="app-container">
+  <div class="app-container hidden" id="app-dashboard-view">
     <!-- Header -->
     <header class="app-header">
       <div class="header-main-row">
@@ -138,15 +138,19 @@
     </div>
   </div>
 
-  <!-- Auth Modal (Login / Register / Forgot Password) -->
-  <div id="auth-modal" class="modal-overlay hidden">
-    <div class="modal-card card">
-      <button class="modal-close-btn" id="close-auth-btn">&times;</button>
+  <!-- Auth Screen (Login / Register / Forgot Password) -->
+  <div id="app-auth-view" class="auth-page-container hidden">
+    <div class="auth-page-card card">
+      <div class="auth-logo-area">
+        <span class="logo-accent">Direction</span>
+        <span class="logo-main">Classes</span>
+      </div>
+      <p class="auth-tagline">Exam &amp; Mark Scheme Generator Platform</p>
       
       <!-- Login View -->
       <div id="auth-login-view">
         <h2 class="modal-title">Welcome Back</h2>
-        <p class="modal-subtitle">Log in to generate examination papers</p>
+        <p class="modal-subtitle">Log in to configure and generate examination papers</p>
         <form id="login-form">
           <div class="form-group">
             <label for="login-email">Email Address</label>

@@ -35,10 +35,10 @@ async function main() {
   await page.screenshot({ path: path.join(__dirname, 'initial_state.png') });
   console.log("Saved initial_state.png screenshot");
 
-  // Click Register Button
-  console.log("Clicking 'Register' button...");
-  await page.waitForSelector('#show-register-btn', { timeout: 10000 });
-  await page.evaluate(() => document.getElementById('show-register-btn').click());
+  // Switch to Register Screen
+  console.log("Switching to Register Screen...");
+  await page.waitForSelector('#go-to-register', { timeout: 10000 });
+  await page.evaluate(() => document.getElementById('go-to-register').click());
   await new Promise(resolve => setTimeout(resolve, 500));
 
   // Fill Register Form
