@@ -248,10 +248,18 @@ async function getBrowser() {
     const puppeteerCoreModule = await import('puppeteer-core');
     const puppeteerCore = puppeteerCoreModule.default || puppeteerCoreModule;
 
+    const executablePath = await chromium.executablePath();
+    if (executablePath) {
+      const execDir = path.dirname(executablePath);
+      process.env.LD_LIBRARY_PATH = process.env.LD_LIBRARY_PATH 
+        ? `${process.env.LD_LIBRARY_PATH}:${execDir}` 
+        : execDir;
+    }
+
     return await puppeteerCore.launch({
       args: chromium.args,
       defaultViewport: chromium.defaultViewport,
-      executablePath: await chromium.executablePath(),
+      executablePath: executablePath,
       headless: chromium.headless,
     });
   } else {
