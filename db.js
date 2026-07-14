@@ -13,9 +13,11 @@ export async function getDb() {
     return dbInstance;
   }
 
+  const isVercel = !!process.env.VERCEL;
   dbInstance = await open({
     filename: dbPath,
-    driver: sqlite3.Database
+    driver: sqlite3.Database,
+    mode: isVercel ? sqlite3.OPEN_READONLY : undefined
   });
 
   return dbInstance;

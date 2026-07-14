@@ -5,7 +5,6 @@ import path from 'path';
 import fs from 'fs';
 import csv from 'csv-parser';
 import archiver from 'archiver';
-import puppeteer from 'puppeteer';
 import http from 'http';
 import https from 'https';
 import { fileURLToPath } from 'url';
@@ -28,10 +27,12 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Initialize DB on server start
-initDb().catch(err => {
-  console.error("DB Initialization failed:", err);
-});
+// Initialize DB on server start (only if not on Vercel)
+if (!process.env.VERCEL) {
+  initDb().catch(err => {
+    console.error("DB Initialization failed:", err);
+  });
+}
 
 // Endpoint: Get distinct subjects
 app.get('/api/subjects', async (req, res) => {
@@ -235,6 +236,29 @@ app.post('/api/import', upload.single('file'), async (req, res) => {
     });
 });
 
+// Helper: Dynamically launch browser based on environment (Vercel serverless vs Local)
+async function getBrowser() {
+  const isVercel = !!process.env.VERCEL;
+
+  if (isVercel) {
+    const chromium = (await import('@sparticuz/chromium-min')).default;
+    const puppeteerCore = (await import('puppeteer-core')).default;
+    return await puppeteerCore.launch({
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath(),
+      headless: chromium.headless,
+    });
+  } else {
+    // Local development
+    const puppeteer = (await import('puppeteer')).default;
+    return await puppeteer.launch({
+      headless: 'new',
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
+  }
+}
+
 // Endpoint: Generate Question Paper and Mark Scheme
 app.post('/api/generate', async (req, res) => {
   const {
@@ -371,10 +395,7 @@ app.post('/api/generate', async (req, res) => {
     });
 
     // Render PDFs using Puppeteer
-    const browser = await puppeteer.launch({
-      headless: 'new',
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
-    });
+    const browser = await getBrowser();
 
     const [qpPdf, msPdf] = await Promise.all([
       renderPdf(browser, questionPaperHtml, subject, 'Question Paper', headerImage, footerImage),
@@ -849,3 +870,5 @@ async function replaceImagePlaceholdersWithBase64(text) {
 app.listen(PORT, () => {
   console.log(`Server is running at http://localhost:${PORT}`);
 });
+
+export default app;
