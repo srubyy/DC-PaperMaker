@@ -982,9 +982,8 @@ async function handleLogout() {
     if (res.ok) {
       currentUser = null;
       updateAuthWidget();
+      showAuthScreen('login');
       showToast('Logged out successfully.', 'info');
-      // If we are currently showing a generated state or want to reset layout
-      validateAndCalculate();
     }
   } catch (err) {
     showToast('Failed to log out.', 'danger');
