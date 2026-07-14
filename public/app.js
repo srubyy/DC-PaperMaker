@@ -36,6 +36,8 @@ window.addEventListener('DOMContentLoaded', () => {
   loadSubjects();
   setupYearSliders();
   setupImageUploads();
+  checkAuth();
+  setupAuthEventListeners();
   
   // Submit action
   generateBtn.addEventListener('click', generateExamPaper);
@@ -449,6 +451,16 @@ async function generateExamPaper() {
       body: JSON.stringify(payload)
     });
 
+    if (res.status === 401) {
+      showToast('Authentication required. Please log in or register to generate exam papers.', 'danger');
+      openAuthModal('login');
+      // Reset loading state
+      generateBtn.disabled = false;
+      spinner.classList.add('hidden');
+      btnText.textContent = 'Generate Paired PDFs';
+      return;
+    }
+
     if (!res.ok) {
       const errData = await res.json();
       throw new Error(errData.error || 'Failed to generate');
@@ -648,3 +660,337 @@ function showToast(message, type = 'info') {
     });
   }, 4000);
 }
+
+// ==========================================
+// User Authentication System (Frontend)
+// ==========================================
+let currentUser = null;
+
+// DOM Selectors for Auth
+const authModal = document.getElementById('auth-modal');
+const closeAuthBtn = document.getElementById('close-auth-btn');
+const authLoginView = document.getElementById('auth-login-view');
+const authRegisterView = document.getElementById('auth-register-view');
+const authForgotView = document.getElementById('auth-forgot-view');
+
+const loginForm = document.getElementById('login-form');
+const registerForm = document.getElementById('register-form');
+const forgotForm = document.getElementById('forgot-form');
+
+const registerPassword = document.getElementById('register-password');
+const registerConfirmPassword = document.getElementById('register-confirm-password');
+const registerTerms = document.getElementById('register-terms');
+const registerSubmitBtn = document.getElementById('register-submit-btn');
+
+// Check Current User Session
+async function checkAuth() {
+  const authWidget = document.getElementById('auth-widget');
+  try {
+    const res = await fetch('/api/auth/me');
+    if (res.ok) {
+      currentUser = await res.json();
+    } else {
+      currentUser = null;
+    }
+  } catch (err) {
+    currentUser = null;
+  }
+  updateAuthWidget();
+}
+
+// Update Header Navigation Widget
+function updateAuthWidget() {
+  const authWidget = document.getElementById('auth-widget');
+  if (!authWidget) return;
+
+  if (currentUser) {
+    const displayName = currentUser.name || currentUser.email;
+    authWidget.innerHTML = `
+      <div class="user-display">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="user-avatar-icon"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <span class="user-email-text" title="${displayName}">${displayName}</span>
+      </div>
+      <button class="btn btn-logout" id="logout-btn">Log Out</button>
+    `;
+
+    document.getElementById('logout-btn').addEventListener('click', handleLogout);
+  } else {
+    authWidget.innerHTML = `
+      <button class="btn btn-outline" id="show-login-btn">Log In</button>
+      <button class="btn btn-primary" id="show-register-btn">Register</button>
+    `;
+
+    document.getElementById('show-login-btn').addEventListener('click', () => openAuthModal('login'));
+    document.getElementById('show-register-btn').addEventListener('click', () => openAuthModal('register'));
+  }
+}
+
+// Open Auth Modal Overlay
+function openAuthModal(view = 'login') {
+  authModal.classList.remove('hidden');
+  resetAuthForms();
+  showAuthView(view);
+}
+
+// Close Auth Modal
+function closeAuthModal() {
+  authModal.classList.add('hidden');
+}
+
+// Switch between views
+function showAuthView(view) {
+  authLoginView.classList.add('hidden');
+  authRegisterView.classList.add('hidden');
+  authForgotView.classList.add('hidden');
+
+  if (view === 'login') {
+    authLoginView.classList.remove('hidden');
+  } else if (view === 'register') {
+    authRegisterView.classList.remove('hidden');
+  } else if (view === 'forgot') {
+    authForgotView.classList.remove('hidden');
+  }
+}
+
+// Clear input errors and forms
+function resetAuthForms() {
+  loginForm.reset();
+  registerForm.reset();
+  forgotForm.reset();
+
+  document.getElementById('login-error-box').classList.add('hidden');
+  document.getElementById('register-error-box').classList.add('hidden');
+  document.getElementById('forgot-error-box').classList.add('hidden');
+  document.getElementById('forgot-success-box').classList.add('hidden');
+  
+  // Reset password validations
+  const strengthIndicator = document.getElementById('register-password-strength');
+  strengthIndicator.className = 'password-strength-indicator';
+  strengthIndicator.querySelector('.strength-text').textContent = 'Password must be at least 8 characters.';
+  document.getElementById('confirm-password-msg').classList.add('hidden');
+  registerSubmitBtn.disabled = true;
+}
+
+// Configure Event Triggers
+function setupAuthEventListeners() {
+  // Close triggers
+  closeAuthBtn.addEventListener('click', closeAuthModal);
+  authModal.addEventListener('click', (e) => {
+    if (e.target === authModal) closeAuthModal();
+  });
+
+  // Switchers
+  document.getElementById('go-to-register').addEventListener('click', (e) => {
+    e.preventDefault();
+    showAuthView('register');
+  });
+  document.getElementById('go-to-login').addEventListener('click', (e) => {
+    e.preventDefault();
+    showAuthView('login');
+  });
+  document.getElementById('forgot-password-trigger').addEventListener('click', (e) => {
+    e.preventDefault();
+    showAuthView('forgot');
+  });
+  document.getElementById('forgot-back-to-login').addEventListener('click', (e) => {
+    e.preventDefault();
+    showAuthView('login');
+  });
+
+  // Real-time validations
+  registerPassword.addEventListener('input', validateRegisterForm);
+  registerConfirmPassword.addEventListener('input', validateRegisterForm);
+  registerTerms.addEventListener('change', validateRegisterForm);
+
+  // Submits
+  loginForm.addEventListener('submit', handleLogin);
+  registerForm.addEventListener('submit', handleRegister);
+  forgotForm.addEventListener('submit', handleForgotPassword);
+}
+
+// Password Strength & Confirm validation Logic
+function validateRegisterForm() {
+  const password = registerPassword.value;
+  const confirmPassword = registerConfirmPassword.value;
+  const termsChecked = registerTerms.checked;
+  const strengthIndicator = document.getElementById('register-password-strength');
+  const strengthText = strengthIndicator.querySelector('.strength-text');
+  const confirmMsg = document.getElementById('confirm-password-msg');
+
+  let isPasswordOk = false;
+  let isConfirmOk = false;
+
+  // Strength Check
+  strengthIndicator.className = 'password-strength-indicator';
+  if (password.length === 0) {
+    strengthText.textContent = 'Password must be at least 8 characters.';
+  } else if (password.length < 8) {
+    strengthIndicator.classList.add('weak');
+    strengthText.textContent = 'Weak (too short)';
+  } else {
+    // Check complexity
+    const hasLetters = /[a-zA-Z]/.test(password);
+    const hasNumbers = /[0-9]/.test(password);
+    const hasSpecial = /[^a-zA-Z0-9]/.test(password);
+
+    if (hasLetters && hasNumbers && hasSpecial) {
+      strengthIndicator.classList.add('strong');
+      strengthText.textContent = 'Strong password';
+      isPasswordOk = true;
+    } else if (hasLetters && hasNumbers) {
+      strengthIndicator.classList.add('medium');
+      strengthText.textContent = 'Medium complexity';
+      isPasswordOk = true;
+    } else {
+      strengthIndicator.classList.add('weak');
+      strengthText.textContent = 'Weak (include letters & numbers)';
+    }
+  }
+
+  // Matching check
+  if (confirmPassword.length > 0) {
+    if (password !== confirmPassword) {
+      confirmMsg.classList.remove('hidden');
+      isConfirmOk = false;
+    } else {
+      confirmMsg.classList.add('hidden');
+      isConfirmOk = true;
+    }
+  } else {
+    confirmMsg.classList.add('hidden');
+    isConfirmOk = false;
+  }
+
+  // Toggle submit
+  registerSubmitBtn.disabled = !(isPasswordOk && isConfirmOk && termsChecked);
+}
+
+// Handle Login API Request
+async function handleLogin(e) {
+  e.preventDefault();
+  const email = document.getElementById('login-email').value;
+  const password = document.getElementById('login-password').value;
+  const errorBox = document.getElementById('login-error-box');
+  const submitBtn = document.getElementById('login-submit-btn');
+
+  // Loading UI state
+  submitBtn.disabled = true;
+  submitBtn.querySelector('.spinner').classList.remove('hidden');
+  submitBtn.querySelector('.btn-text').textContent = 'Logging In...';
+  errorBox.classList.add('hidden');
+
+  try {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Login failed.');
+
+    currentUser = data;
+    updateAuthWidget();
+    closeAuthModal();
+    showToast('Logged in successfully!', 'success');
+  } catch (err) {
+    errorBox.textContent = err.message;
+    errorBox.classList.remove('hidden');
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.querySelector('.spinner').classList.add('hidden');
+    submitBtn.querySelector('.btn-text').textContent = 'Log In';
+  }
+}
+
+// Handle Register API Request
+async function handleRegister(e) {
+  e.preventDefault();
+  const name = document.getElementById('register-name').value;
+  const email = document.getElementById('register-email').value;
+  const password = registerPassword.value;
+  const errorBox = document.getElementById('register-error-box');
+  const submitBtn = document.getElementById('register-submit-btn');
+
+  submitBtn.disabled = true;
+  submitBtn.querySelector('.spinner').classList.remove('hidden');
+  submitBtn.querySelector('.btn-text').textContent = 'Registering...';
+  errorBox.classList.add('hidden');
+
+  try {
+    const res = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email, password })
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Registration failed.');
+
+    currentUser = data;
+    updateAuthWidget();
+    closeAuthModal();
+    showToast('Account registered successfully!', 'success');
+  } catch (err) {
+    errorBox.textContent = err.message;
+    errorBox.classList.remove('hidden');
+    submitBtn.disabled = false;
+  } finally {
+    submitBtn.querySelector('.spinner').classList.add('hidden');
+    submitBtn.querySelector('.btn-text').textContent = 'Create Account';
+  }
+}
+
+// Handle Mock Reset Password Request
+async function handleForgotPassword(e) {
+  e.preventDefault();
+  const email = document.getElementById('forgot-email').value;
+  const errorBox = document.getElementById('forgot-error-box');
+  const successBox = document.getElementById('forgot-success-box');
+  const submitBtn = document.getElementById('forgot-submit-btn');
+
+  submitBtn.disabled = true;
+  submitBtn.querySelector('.spinner').classList.remove('hidden');
+  submitBtn.querySelector('.btn-text').textContent = 'Sending...';
+  errorBox.classList.add('hidden');
+  successBox.classList.add('hidden');
+
+  try {
+    const res = await fetch('/api/auth/forgot-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Request failed.');
+
+    successBox.textContent = data.message;
+    successBox.classList.remove('hidden');
+    forgotForm.reset();
+  } catch (err) {
+    errorBox.textContent = err.message;
+    errorBox.classList.remove('hidden');
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.querySelector('.spinner').classList.add('hidden');
+    submitBtn.querySelector('.btn-text').textContent = 'Send Reset Link';
+  }
+}
+
+// Handle Logout API Request
+async function handleLogout() {
+  try {
+    const res = await fetch('/api/auth/logout', { method: 'POST' });
+    if (res.ok) {
+      currentUser = null;
+      updateAuthWidget();
+      showToast('Logged out successfully.', 'info');
+      // If we are currently showing a generated state or want to reset layout
+      validateAndCalculate();
+    }
+  } catch (err) {
+    showToast('Failed to log out.', 'danger');
+  }
+}
+

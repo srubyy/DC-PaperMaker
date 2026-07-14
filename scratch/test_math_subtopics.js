@@ -35,6 +35,34 @@ async function main() {
   await page.screenshot({ path: path.join(__dirname, 'initial_state.png') });
   console.log("Saved initial_state.png screenshot");
 
+  // Click Register Button
+  console.log("Clicking 'Register' button...");
+  await page.waitForSelector('#show-register-btn', { timeout: 10000 });
+  await page.evaluate(() => document.getElementById('show-register-btn').click());
+  await new Promise(resolve => setTimeout(resolve, 500));
+
+  // Fill Register Form
+  console.log("Filling register form...");
+  await page.type('#register-name', 'E2E Test User');
+  const testEmail = `e2e_${Date.now()}@example.com`;
+  await page.type('#register-email', testEmail);
+  await page.type('#register-password', 'Password123!');
+  await page.type('#register-confirm-password', 'Password123!');
+  
+  // Accept terms
+  await page.evaluate(() => document.getElementById('register-terms').click());
+  await new Promise(resolve => setTimeout(resolve, 500));
+
+  // Click Submit
+  console.log("Submitting registration...");
+  await page.evaluate(() => document.getElementById('register-submit-btn').click());
+
+  // Wait for success toast
+  console.log("Waiting for registration success toast...");
+  await page.waitForSelector('.toast.toast-success', { timeout: 10000 });
+  console.log("Registration successful!");
+  await new Promise(resolve => setTimeout(resolve, 1000));
+
   // Select subject 'Mathematics'
   console.log("Selecting subject: Mathematics...");
   await page.select('#subject-select', 'Mathematics');
@@ -55,7 +83,7 @@ async function main() {
 
   if (checkboxExists) {
     // Click checkbox
-    await page.click(`#${e18CheckboxId}`);
+    await page.evaluate((id) => document.getElementById(id).click(), e18CheckboxId);
     console.log("Checked 'E1.8: Standard form' checkbox");
 
     // Set count to 2
@@ -82,7 +110,7 @@ async function main() {
 
     // Click generate button
     console.log("Clicking 'Generate Paired PDFs'...");
-    await page.click('#generate-btn');
+    await page.evaluate(() => document.getElementById('generate-btn').click());
 
     // Wait for the success toast (up to 30 seconds)
     console.log("Waiting for generation to finish...");

@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -9,8 +10,11 @@ import http from 'http';
 import https from 'https';
 import { fileURLToPath } from 'url';
 import { getDb, initDb } from './db.js';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const JWT_SECRET = process.env.JWT_SECRET || 'direction-classes-secret-key-13579';
 
 // Ensure upload folder exists
 const isVercel = !!process.env.VERCEL;
@@ -24,16 +28,15 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
+app.use(cookieParser());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Initialize DB on server start (only if not on Vercel)
-if (!process.env.VERCEL) {
-  initDb().catch(err => {
-    console.error("DB Initialization failed:", err);
-  });
-}
+// Initialize DB on server start
+initDb().catch(err => {
+  console.error("DB Initialization failed:", err);
+});
 
 // Endpoint: Get distinct subjects
 app.get('/api/subjects', async (req, res) => {
@@ -280,8 +283,154 @@ async function getBrowser() {
   }
 }
 
+// Helper: Get authenticated user from token
+async function getAuthUser(req) {
+  const token = req.cookies.token;
+  if (!token) return null;
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const db = await getDb();
+    const user = await db.get('SELECT id, name, email FROM users WHERE id = ?', [decoded.id]);
+    return user || null;
+  } catch (err) {
+    return null;
+  }
+}
+
+// Endpoint: Register User
+app.post('/api/auth/register', async (req, res) => {
+  const { name, email, password } = req.body;
+
+  if (!email || !password || password.length < 8) {
+    return res.status(400).json({ error: 'Valid email and password (min 8 characters) are required.' });
+  }
+
+  try {
+    const db = await getDb();
+    
+    // Check if user already exists
+    const existingUser = await db.get('SELECT id FROM users WHERE email = ?', [email.toLowerCase()]);
+    if (existingUser) {
+      return res.status(400).json({ error: 'This email is already registered.' });
+    }
+
+    // Hash password
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(password, salt);
+
+    // Insert user
+    const result = await db.run(
+      'INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)',
+      [name || null, email.toLowerCase(), passwordHash]
+    );
+
+    // Create session token
+    const token = jwt.sign({ id: result.lastID }, JWT_SECRET, { expiresIn: '7d' });
+
+    // Set cookie
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production' || !!process.env.VERCEL,
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+    });
+
+    res.status(201).json({
+      id: result.lastID,
+      name: name || null,
+      email: email.toLowerCase()
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Registration failed due to server error.' });
+  }
+});
+
+// Endpoint: Login User
+app.post('/api/auth/login', async (req, res) => {
+  const { email, password } = req.body;
+
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password are required.' });
+  }
+
+  try {
+    const db = await getDb();
+    
+    // Look up user (use generic error message to prevent enumeration)
+    const user = await db.get('SELECT * FROM users WHERE email = ?', [email.toLowerCase()]);
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid email or password.' });
+    }
+
+    // Verify password
+    const isMatch = await bcrypt.compare(password, user.password_hash);
+    if (!isMatch) {
+      return res.status(401).json({ error: 'Invalid email or password.' });
+    }
+
+    // Create session token
+    const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '7d' });
+
+    // Set cookie
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production' || !!process.env.VERCEL,
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+    });
+
+    res.json({
+      id: user.id,
+      name: user.name,
+      email: user.email
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Login failed due to server error.' });
+  }
+});
+
+// Endpoint: Request Password Reset (Mock for UX flow)
+app.post('/api/auth/forgot-password', async (req, res) => {
+  const { email } = req.body;
+  if (!email) {
+    return res.status(400).json({ error: 'Email is required.' });
+  }
+  
+  try {
+    const db = await getDb();
+    const user = await db.get('SELECT id FROM users WHERE email = ?', [email.toLowerCase()]);
+    // Always return a success response to avoid email harvesting, but simulate sending a link if user exists
+    if (user) {
+      console.log(`Password reset link requested for ${email.toLowerCase()}`);
+    }
+    
+    res.json({ message: 'If that email is registered, we have sent a reset password link.' });
+  } catch (error) {
+    res.status(500).json({ error: 'Server error occurred.' });
+  }
+});
+
+// Endpoint: Logout User
+app.post('/api/auth/logout', (req, res) => {
+  res.clearCookie('token');
+  res.json({ success: true, message: 'Logged out successfully.' });
+});
+
+// Endpoint: Current Session user
+app.get('/api/auth/me', async (req, res) => {
+  const user = await getAuthUser(req);
+  if (!user) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  res.json(user);
+});
+
 // Endpoint: Generate Question Paper and Mark Scheme
 app.post('/api/generate', async (req, res) => {
+  const user = await getAuthUser(req);
+  if (!user) {
+    return res.status(401).json({ error: 'Authentication required. Please log in or register to generate exam papers.' });
+  }
   const {
     subject,
     ExamBlueprint, // [{ topic, subtopic, count }]

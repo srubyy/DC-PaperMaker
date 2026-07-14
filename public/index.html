@@ -14,9 +14,15 @@
   <div class="app-container">
     <!-- Header -->
     <header class="app-header">
-      <div class="logo-area">
-        <span class="logo-accent">Direction</span>
-        <span class="logo-main">Classes</span>
+      <div class="header-main-row">
+        <div class="logo-area">
+          <span class="logo-accent">Direction</span>
+          <span class="logo-main">Classes</span>
+        </div>
+        <!-- Authentication Navigation Widget -->
+        <div class="auth-widget" id="auth-widget">
+          <div class="auth-loading">Loading account...</div>
+        </div>
       </div>
       <p class="tagline">Exam &amp; Mark Scheme Generator Platform</p>
     </header>
@@ -129,6 +135,99 @@
         </div>
 
       </aside>
+    </div>
+  </div>
+
+  <!-- Auth Modal (Login / Register / Forgot Password) -->
+  <div id="auth-modal" class="modal-overlay hidden">
+    <div class="modal-card card">
+      <button class="modal-close-btn" id="close-auth-btn">&times;</button>
+      
+      <!-- Login View -->
+      <div id="auth-login-view">
+        <h2 class="modal-title">Welcome Back</h2>
+        <p class="modal-subtitle">Log in to generate examination papers</p>
+        <form id="login-form">
+          <div class="form-group">
+            <label for="login-email">Email Address</label>
+            <input type="email" id="login-email" required placeholder="name@example.com" autocomplete="email">
+          </div>
+          <div class="form-group">
+            <div class="label-row">
+              <label for="login-password">Password</label>
+              <a href="#" class="forgot-password-link" id="forgot-password-trigger">Forgot password?</a>
+            </div>
+            <input type="password" id="login-password" required placeholder="••••••••" autocomplete="current-password">
+          </div>
+          <div class="modal-error-area hidden" id="login-error-box"></div>
+          <button type="submit" class="btn btn-primary btn-block" id="login-submit-btn">
+            <span class="btn-text">Log In</span>
+            <div class="spinner hidden"></div>
+          </button>
+        </form>
+        <p class="auth-toggle-text">Don't have an account? <a href="#" id="go-to-register">Register</a></p>
+      </div>
+
+      <!-- Register View -->
+      <div id="auth-register-view" class="hidden">
+        <h2 class="modal-title">Create Account</h2>
+        <p class="modal-subtitle">Register to unlock exam paper downloads</p>
+        <form id="register-form">
+          <div class="form-group">
+            <label for="register-name">Full Name (Optional)</label>
+            <input type="text" id="register-name" placeholder="John Doe" autocomplete="name">
+          </div>
+          <div class="form-group">
+            <label for="register-email">Email Address</label>
+            <input type="email" id="register-email" required placeholder="name@example.com" autocomplete="email">
+          </div>
+          <div class="form-group">
+            <label for="register-password">Password</label>
+            <input type="password" id="register-password" required placeholder="••••••••" autocomplete="new-password">
+            <div class="password-strength-indicator" id="register-password-strength">
+              <div class="strength-bar"></div>
+              <span class="strength-text">Password must be at least 8 characters.</span>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="register-confirm-password">Confirm Password</label>
+            <input type="password" id="register-confirm-password" required placeholder="••••••••" autocomplete="new-password">
+            <span class="validation-msg hidden" id="confirm-password-msg">Passwords must match.</span>
+          </div>
+          <div class="form-group checkbox-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="register-terms" required>
+              <span class="checkbox-custom"></span>
+              <span class="checkbox-text">I agree to the <a href="#">Terms of Service</a> &amp; <a href="#">Privacy Policy</a></span>
+            </label>
+          </div>
+          <div class="modal-error-area hidden" id="register-error-box"></div>
+          <button type="submit" class="btn btn-primary btn-block" id="register-submit-btn" disabled>
+            <span class="btn-text">Create Account</span>
+            <div class="spinner hidden"></div>
+          </button>
+        </form>
+        <p class="auth-toggle-text">Already have an account? <a href="#" id="go-to-login">Log in</a></p>
+      </div>
+
+      <!-- Forgot Password View -->
+      <div id="auth-forgot-view" class="hidden">
+        <h2 class="modal-title">Reset Password</h2>
+        <p class="modal-subtitle">Enter your email to request a reset link</p>
+        <form id="forgot-form">
+          <div class="form-group">
+            <label for="forgot-email">Email Address</label>
+            <input type="email" id="forgot-email" required placeholder="name@example.com" autocomplete="email">
+          </div>
+          <div class="modal-error-area hidden" id="forgot-error-box"></div>
+          <div class="modal-success-area hidden" id="forgot-success-box"></div>
+          <button type="submit" class="btn btn-primary btn-block" id="forgot-submit-btn">
+            <span class="btn-text">Send Reset Link</span>
+            <div class="spinner hidden"></div>
+          </button>
+        </form>
+        <p class="auth-toggle-text">Back to <a href="#" id="forgot-back-to-login">Log in</a></p>
+      </div>
     </div>
   </div>
 
