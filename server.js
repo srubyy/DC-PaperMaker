@@ -33,9 +33,15 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Initialize DB on server start
-initDb().catch(err => {
+// Initialize DB on server start and capture the promise
+const dbInitPromise = initDb().catch(err => {
   console.error("DB Initialization failed:", err);
+});
+
+// Middleware to block request processing until DB schema migrations and seeds finish
+app.use(async (req, res, next) => {
+  await dbInitPromise;
+  next();
 });
 
 // Endpoint: Get distinct subjects

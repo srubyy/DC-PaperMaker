@@ -10,26 +10,27 @@ const srcDbPath = path.join(__dirname, 'questions.db');
 const isVercel = !!process.env.VERCEL;
 const dbPath = isVercel ? '/tmp/questions.db' : srcDbPath;
 
-let dbInstance = null;
+let dbPromise = null;
 
 export async function getDb() {
-  if (dbInstance) {
-    return dbInstance;
+  if (dbPromise) {
+    return dbPromise;
   }
 
-  if (isVercel && !fs.existsSync(dbPath)) {
-    // Copy the original seed database to /tmp so we can write user rows and upload files
-    fs.copyFileSync(srcDbPath, dbPath);
-    console.log('Database copied to writeable /tmp path.');
-  }
+  dbPromise = (async () => {
+    if (isVercel && !fs.existsSync(dbPath)) {
+      // Copy the original seed database to /tmp so we can write user rows and upload files
+      fs.copyFileSync(srcDbPath, dbPath);
+      console.log('Database copied to writeable /tmp path.');
+    }
 
-  dbInstance = await open({
-    filename: dbPath,
-    driver: sqlite3.Database
-    // Always open in read-write mode since we copy it to /tmp on Vercel!
-  });
+    return await open({
+      filename: dbPath,
+      driver: sqlite3.Database
+    });
+  })();
 
-  return dbInstance;
+  return dbPromise;
 }
 
 export async function initDb() {
