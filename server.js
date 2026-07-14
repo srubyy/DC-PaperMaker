@@ -242,6 +242,10 @@ async function getBrowser() {
   const isVercel = !!process.env.VERCEL;
 
   if (isVercel) {
+    // Force sparticuz/chromium-min environment detection to use AL2023 packages (Node 20+)
+    process.env.AWS_EXECUTION_ENV = 'AWS_Lambda_nodejs20.x';
+    process.env.AWS_LAMBDA_JS_RUNTIME = 'nodejs20.x';
+
     const chromiumModule = await import('@sparticuz/chromium-min');
     const chromium = chromiumModule.default || chromiumModule;
     
