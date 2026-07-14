@@ -1263,7 +1263,7 @@ input:checked + .toggle-slider:before {
 .password-toggle-btn {
   position: absolute;
   top: 50%;
-  right: 12px;
+  right: 6px;
   transform: translateY(-50%);
   background: transparent;
   border: none;
@@ -1272,9 +1272,11 @@ input:checked + .toggle-slider:before {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 6px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   transition: var(--transition-smooth);
+  z-index: 10;
 }
 
 .password-toggle-btn:hover {
