@@ -3,6 +3,7 @@ import { open } from 'sqlite';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import bcrypt from 'bcryptjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const srcDbPath = path.join(__dirname, 'questions.db');
@@ -64,6 +65,21 @@ export async function initDb() {
     CREATE INDEX IF NOT EXISTS idx_questions_year ON questions(year);
     CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
   `);
+
+  // Seed demo user if not already present
+  try {
+    const demoExists = await db.get("SELECT COUNT(*) as count FROM users WHERE email = ?", ['demo@example.com']);
+    if (demoExists && demoExists.count === 0) {
+      const demoHash = await bcrypt.hash('Password123!', 10);
+      await db.run(
+        "INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)",
+        ['Demo User', 'demo@example.com', demoHash]
+      );
+      console.log('Demo user seeded successfully (demo@example.com / Password123!)');
+    }
+  } catch (err) {
+    console.error('Failed to seed demo user:', err.message);
+  }
 
   console.log('Database initialized successfully with users schema.');
   return db;
