@@ -13,12 +13,13 @@ import { getDb, initDb } from './db.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Ensure upload folder exists
-const uploadDir = path.join(__dirname, 'uploads');
+const isVercel = !!process.env.VERCEL;
+const uploadDir = isVercel ? '/tmp/uploads' : path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-const upload = multer({ dest: 'uploads/' });
+const upload = multer({ dest: uploadDir });
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -241,8 +242,12 @@ async function getBrowser() {
   const isVercel = !!process.env.VERCEL;
 
   if (isVercel) {
-    const chromium = (await import('@sparticuz/chromium-min')).default;
-    const puppeteerCore = (await import('puppeteer-core')).default;
+    const chromiumModule = await import('@sparticuz/chromium-min');
+    const chromium = chromiumModule.default || chromiumModule;
+    
+    const puppeteerCoreModule = await import('puppeteer-core');
+    const puppeteerCore = puppeteerCoreModule.default || puppeteerCoreModule;
+
     return await puppeteerCore.launch({
       args: chromium.args,
       defaultViewport: chromium.defaultViewport,
@@ -251,7 +256,8 @@ async function getBrowser() {
     });
   } else {
     // Local development
-    const puppeteer = (await import('puppeteer')).default;
+    const puppeteerModule = await import('puppeteer');
+    const puppeteer = puppeteerModule.default || puppeteerModule;
     return await puppeteer.launch({
       headless: 'new',
       args: ['--no-sandbox', '--disable-setuid-sandbox']
@@ -867,8 +873,10 @@ async function replaceImagePlaceholdersWithBase64(text) {
   return newText;
 }
 
-app.listen(PORT, () => {
-  console.log(`Server is running at http://localhost:${PORT}`);
-});
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`Server is running at http://localhost:${PORT}`);
+  });
+}
 
 export default app;
