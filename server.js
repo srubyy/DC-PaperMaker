@@ -250,6 +250,15 @@ async function getBrowser() {
 
     const executablePath = await chromium.executablePath('https://github.com/Sparticuz/chromium/releases/download/v123.0.1/chromium-v123.0.1-pack.tar');
 
+    if (executablePath) {
+      const execDir = path.dirname(executablePath);
+      const libDir = path.join(execDir, 'lib');
+      const pathsToAppend = `${execDir}:${libDir}`;
+      process.env.LD_LIBRARY_PATH = process.env.LD_LIBRARY_PATH 
+        ? `${process.env.LD_LIBRARY_PATH}:${pathsToAppend}` 
+        : pathsToAppend;
+    }
+
     return await puppeteerCore.launch({
       args: chromium.args,
       defaultViewport: chromium.defaultViewport,
