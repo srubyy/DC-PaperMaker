@@ -242,7 +242,7 @@ async function getBrowser() {
   const isVercel = !!process.env.VERCEL;
 
   if (isVercel) {
-    const chromiumModule = await import('@sparticuz/chromium-min');
+    const chromiumModule = await import('@sparticuz/chromium');
     const chromium = chromiumModule.default || chromiumModule;
     
     const puppeteerCoreModule = await import('puppeteer-core');
