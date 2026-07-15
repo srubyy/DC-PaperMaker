@@ -112,6 +112,25 @@ app.get('/api/metadata', async (req, res) => {
   }
 });
 
+// Endpoint: Get all questions (full details) for a subject
+app.get('/api/questions', async (req, res) => {
+  const { subject } = req.query;
+  if (!subject) {
+    return res.status(400).json({ error: 'Subject parameter is required' });
+  }
+
+  try {
+    const db = await getDb();
+    const questions = await db.all(
+      'SELECT * FROM questions WHERE subject = ? ORDER BY id ASC',
+      [subject]
+    );
+    res.json(questions);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Endpoint: Check question availability for dynamic UI validation
 app.post('/api/check-availability', async (req, res) => {
   const { subject, topics, yearMin, yearMax } = req.body;
@@ -433,13 +452,10 @@ app.get('/api/auth/me', async (req, res) => {
 
 // Endpoint: Generate Question Paper and Mark Scheme
 app.post('/api/generate', async (req, res) => {
-  const user = await getAuthUser(req);
-  if (!user) {
-    return res.status(401).json({ error: 'Authentication required. Please log in or register to generate exam papers.' });
-  }
   const {
     subject,
     ExamBlueprint, // [{ topic, subtopic, count }]
+    questionIds, // optional: array of question IDs
     yearMin,
     yearMax,
     randomize, // boolean
@@ -447,82 +463,121 @@ app.post('/api/generate', async (req, res) => {
     footerImage  // base64 string or null
   } = req.body;
 
-  if (!subject || !ExamBlueprint || !Array.isArray(ExamBlueprint)) {
-    return res.status(400).json({ error: 'Missing or invalid parameters' });
+  console.log(`[generate] POST /api/generate hit - Subject: "${subject}", Questions count: ${questionIds ? questionIds.length : 0}`);
+
+  const user = await getAuthUser(req);
+  if (!user) {
+    console.log("[generate] Request blocked: User is not authenticated.");
+    return res.status(401).json({ error: 'Authentication required. Please log in or register to generate exam papers.' });
+  }
+  if (!subject) {
+    return res.status(400).json({ error: 'Subject parameter is required' });
   }
 
   try {
     const db = await getDb();
-    const selectedQuestions = [];
+    let finalQuestionsList = [];
 
-    // Query questions topic by topic according to ExamBlueprint
-    for (const item of ExamBlueprint) {
-      const count = parseInt(item.count, 10);
-      if (isNaN(count) || count <= 0) continue;
-
-      // Retrieve all eligible questions for this category and year range
+    if (questionIds && Array.isArray(questionIds) && questionIds.length > 0) {
+      // Query specific question IDs
+      const placeholders = questionIds.map(() => '?').join(',');
       const questions = await db.all(
-        `SELECT * FROM questions 
-         WHERE subject = ? AND topic = ? AND subtopic = ? AND year >= ? AND year <= ?`,
-        [subject, item.topic, item.subtopic, yearMin, yearMax]
+        `SELECT * FROM questions WHERE id IN (${placeholders})`,
+        questionIds
       );
 
-      // Validate question count matches request
-      if (questions.length < count) {
-        return res.status(400).json({
-          error: `Only ${questions.length} questions available for "${item.subtopic}" in years ${yearMin}-${yearMax}, but you requested ${count}.`
+      // Create a map to preserve the exact order of questionIds
+      const questionMap = {};
+      questions.forEach(q => {
+        questionMap[q.id] = q;
+      });
+
+      finalQuestionsList = questionIds.map(id => questionMap[id]).filter(Boolean);
+
+      if (finalQuestionsList.length === 0) {
+        return res.status(400).json({ error: 'None of the selected questions were found in the database.' });
+      }
+
+      if (randomize) {
+        // If randomize is ON, shuffle the curated list
+        for (let i = finalQuestionsList.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [finalQuestionsList[i], finalQuestionsList[j]] = [finalQuestionsList[j], finalQuestionsList[i]];
+        }
+      }
+    } else {
+      if (!ExamBlueprint || !Array.isArray(ExamBlueprint)) {
+        return res.status(400).json({ error: 'Missing or invalid parameters' });
+      }
+
+      const selectedQuestions = [];
+
+      // Query questions topic by topic according to ExamBlueprint
+      for (const item of ExamBlueprint) {
+        const count = parseInt(item.count, 10);
+        if (isNaN(count) || count <= 0) continue;
+
+        // Retrieve all eligible questions for this category and year range
+        const questions = await db.all(
+          `SELECT * FROM questions 
+           WHERE subject = ? AND topic = ? AND subtopic = ? AND year >= ? AND year <= ?`,
+          [subject, item.topic, item.subtopic, yearMin, yearMax]
+        );
+
+        // Validate question count matches request
+        if (questions.length < count) {
+          return res.status(400).json({
+            error: `Only ${questions.length} questions available for "${item.subtopic}" in years ${yearMin}-${yearMax}, but you requested ${count}.`
+          });
+        }
+
+        let selectedForTopic = [...questions];
+
+        if (randomize) {
+          // Shuffle array in-place
+          for (let i = selectedForTopic.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [selectedForTopic[i], selectedForTopic[j]] = [selectedForTopic[j], selectedForTopic[i]];
+          }
+        } else {
+          // Sort deterministically by ID
+          selectedForTopic.sort((a, b) => a.id.localeCompare(b.id));
+        }
+
+        // Slice the requested number of questions
+        selectedQuestions.push({
+          topic: item.subtopic,
+          questions: selectedForTopic.slice(0, count)
         });
       }
 
-      let selectedForTopic = [...questions];
+      if (selectedQuestions.length === 0) {
+        return res.status(400).json({ error: 'No questions selected. Please choose at least one topic.' });
+      }
 
       if (randomize) {
-        // Shuffle array in-place
-        for (let i = selectedForTopic.length - 1; i > 0; i--) {
+        // Shuffle the topics order
+        for (let i = selectedQuestions.length - 1; i > 0; i--) {
           const j = Math.floor(Math.random() * (i + 1));
-          [selectedForTopic[i], selectedForTopic[j]] = [selectedForTopic[j], selectedForTopic[i]];
+          [selectedQuestions[i], selectedQuestions[j]] = [selectedQuestions[j], selectedQuestions[i]];
+        }
+        
+        // Flatten questions
+        for (const group of selectedQuestions) {
+          finalQuestionsList.push(...group.questions);
+        }
+        
+        // Shuffle the flattened list one final time to fully mix topics if randomize is ON
+        for (let i = finalQuestionsList.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [finalQuestionsList[i], finalQuestionsList[j]] = [finalQuestionsList[j], finalQuestionsList[i]];
         }
       } else {
-        // Sort deterministically by ID
-        selectedForTopic.sort((a, b) => a.id.localeCompare(b.id));
-      }
-
-      // Slice the requested number of questions
-      selectedQuestions.push({
-        topic: item.subtopic,
-        questions: selectedForTopic.slice(0, count)
-      });
-    }
-
-    if (selectedQuestions.length === 0) {
-      return res.status(400).json({ error: 'No questions selected. Please choose at least one topic.' });
-    }
-
-    // Determine final questions list and their order
-    let finalQuestionsList = [];
-
-    if (randomize) {
-      // Shuffle the topics order
-      for (let i = selectedQuestions.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [selectedQuestions[i], selectedQuestions[j]] = [selectedQuestions[j], selectedQuestions[i]];
-      }
-      
-      // Flatten questions
-      for (const group of selectedQuestions) {
-        finalQuestionsList.push(...group.questions);
-      }
-      
-      // Shuffle the flattened list one final time to fully mix topics if randomize is ON
-      for (let i = finalQuestionsList.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [finalQuestionsList[i], finalQuestionsList[j]] = [finalQuestionsList[j], finalQuestionsList[i]];
-      }
-    } else {
-      // Keep topics in sorted alphabetical/consistent order, and flatten questions
-      selectedQuestions.sort((a, b) => a.topic.localeCompare(b.topic));
-      for (const group of selectedQuestions) {
-        finalQuestionsList.push(...group.questions);
+        // Keep topics in sorted alphabetical/consistent order, and flatten questions
+        selectedQuestions.sort((a, b) => a.topic.localeCompare(b.topic));
+        for (const group of selectedQuestions) {
+          finalQuestionsList.push(...group.questions);
+        }
       }
     }
 
@@ -593,6 +648,7 @@ app.post('/api/generate', async (req, res) => {
     archive.append(qpPdf, { name: 'Question_Paper.pdf' });
     archive.append(msPdf, { name: 'Mark_Scheme.pdf' });
     await archive.finalize();
+    console.log(`[generate] ZIP generated and sent successfully for subject: "${subject}"`);
 
   } catch (error) {
     console.error("PDF generation failed:", error);
@@ -934,8 +990,16 @@ function formatRichText(text, subject, isMarkScheme = false) {
     if (hasMathSlice) {
       // Math visual slices: render in a zero-space column block allowing clean image splits
       const breakRule = isMarkScheme ? 'avoid' : 'auto';
-      const imgTags = consecutiveImages.map(url => {
-        return `<img src="${url}" style="width: 100%; display: block; margin: 0; padding: 0; border: none; box-shadow: none; page-break-inside: ${breakRule}; background-color: #ffffff;" />`;
+      const imgTags = consecutiveImages.map((url, index) => {
+        let clip = 'inset(0 28px 0 0)';
+        if (consecutiveImages.length === 1) {
+          clip = 'inset(2px 28px 12px 0)';
+        } else if (index === 0) {
+          clip = 'inset(2px 28px 0 0)';
+        } else if (index === consecutiveImages.length - 1) {
+          clip = 'inset(0 28px 12px 0)';
+        }
+        return `<img src="${url}" style="width: 100%; display: block; margin: 0; padding: 0; border: none; box-shadow: none; page-break-inside: ${breakRule}; background-color: #ffffff; clip-path: ${clip};" />`;
       }).join('');
       consecutiveImages = [];
       return `
@@ -947,7 +1011,7 @@ function formatRichText(text, subject, isMarkScheme = false) {
       const rendered = consecutiveImages.map(url => {
         return `
           <div style="margin: 15px 0; text-align: center; page-break-inside: avoid;">
-            <img src="${url}" style="max-width: 90%; max-height: 250px; object-fit: contain; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px; background-color: #ffffff;" />
+            <img src="${url}" style="max-width: 90%; max-height: 250px; object-fit: contain; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px; background-color: #ffffff; clip-path: inset(2px 28px 12px 0);" />
           </div>`;
       }).join('');
       consecutiveImages = [];

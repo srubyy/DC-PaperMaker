@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=1.4">
+  <link rel="stylesheet" href="style.css?v=1.5">
 </head>
 <body>
   <div class="app-container hidden" id="app-dashboard-view">
@@ -27,10 +27,10 @@
       <p class="tagline">Exam &amp; Mark Scheme Generator Platform</p>
     </header>
 
-    <div class="main-layout">
-      <!-- Left Column: Settings Panel -->
-      <main class="control-panel card">
-        <h2 class="section-title">Configure Examination</h2>
+    <div class="main-layout test-builder-layout">
+      <!-- Column 1: Filters (Left) -->
+      <main class="control-panel card filter-panel">
+        <h2 class="section-title">Workspace Filters</h2>
         
         <form id="generator-form" onsubmit="event.preventDefault();">
           <!-- Subject Selector -->
@@ -43,18 +43,59 @@
             </div>
           </div>
 
-          <!-- Topics Selection List -->
-          <div class="form-group topics-section">
-            <label>Select Topics &amp; Question Counts</label>
-            <div id="topics-list-container" class="topics-list">
-              <p class="info-text">Please select a subject to load topics.</p>
+          <!-- Difficulty Filters -->
+          <div class="form-group">
+            <label>Difficulty</label>
+            <div class="checkbox-group-horizontal">
+              <label class="checkbox-label inline-flex">
+                <input type="checkbox" id="diff-easy" value="Easy" checked>
+                <span class="checkbox-custom"></span>
+                <span class="checkbox-text">Easy</span>
+              </label>
+              <label class="checkbox-label inline-flex">
+                <input type="checkbox" id="diff-medium" value="Medium" checked>
+                <span class="checkbox-custom"></span>
+                <span class="checkbox-text">Medium</span>
+              </label>
+              <label class="checkbox-label inline-flex">
+                <input type="checkbox" id="diff-hard" value="Hard" checked>
+                <span class="checkbox-custom"></span>
+                <span class="checkbox-text">Hard</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Question Type Filters -->
+          <div class="form-group">
+            <label>Question Type</label>
+            <div class="checkbox-grid-2x2">
+              <label class="checkbox-label inline-flex">
+                <input type="checkbox" id="type-mcq" value="MCQ" checked>
+                <span class="checkbox-custom"></span>
+                <span class="checkbox-text">MCQ</span>
+              </label>
+              <label class="checkbox-label inline-flex">
+                <input type="checkbox" id="type-short" value="Short Answer" checked>
+                <span class="checkbox-custom"></span>
+                <span class="checkbox-text">Short</span>
+              </label>
+              <label class="checkbox-label inline-flex">
+                <input type="checkbox" id="type-structured" value="Structured" checked>
+                <span class="checkbox-custom"></span>
+                <span class="checkbox-text">Struct</span>
+              </label>
+              <label class="checkbox-label inline-flex">
+                <input type="checkbox" id="type-essay" value="Essay" checked>
+                <span class="checkbox-custom"></span>
+                <span class="checkbox-text">Essay</span>
+              </label>
             </div>
           </div>
 
           <!-- Year Range -->
           <div class="form-group">
             <div class="label-row">
-              <label>Year Range Filter</label>
+              <label>Year Range</label>
               <span id="year-display" class="badge">2020 - 2026</span>
             </div>
             <div class="range-slider-container">
@@ -64,26 +105,76 @@
             </div>
           </div>
 
-          <!-- Randomize Option -->
-          <div class="form-group toggle-group">
-            <div class="toggle-description">
-              <label for="randomize-toggle">Randomize Exam Paper</label>
-              <p class="help-text">Shuffle questions inside topics and randomize topic order</p>
+          <!-- Topics Selection List -->
+          <div class="form-group topics-section">
+            <label>Topics &amp; Subtopics</label>
+            <div id="topics-list-container" class="topics-list">
+              <p class="info-text">Please select a subject to load topics.</p>
             </div>
-            <label class="switch">
-              <input type="checkbox" id="randomize-toggle">
-              <span class="toggle-slider"></span>
-            </label>
           </div>
 
-          <!-- Upload Branding Assets (Header & Footer) -->
+          <!-- CSV Importer (Optional/Admin) -->
+          <div class="form-group branding-section" style="margin-top: 25px; border-top: 1px solid var(--border-color); padding-top: 15px;">
+            <details class="model-answer-details" style="background: none; border: 1px solid var(--border-color);">
+              <summary class="model-answer-summary" style="font-size: 0.8rem; padding: 6px 10px; color: var(--text-muted);">Database Importer (CSV)</summary>
+              <div class="model-answer-content" style="padding: 10px; background: none; border-top: 1px solid var(--border-color);">
+                <div class="upload-box" id="csv-dropzone" style="border: 2px dashed var(--border-color); cursor: pointer; text-align: center; padding: 15px 10px; position: relative;">
+                  <input type="file" id="csv-file-input" accept=".csv" class="file-input" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer;">
+                  <div class="upload-placeholder" style="pointer-events: none;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="upload-icon"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    <span style="font-size: 0.75rem; display: block; margin-top: 5px; font-weight: 500;">Click or Drag CSV here</span>
+                  </div>
+                </div>
+              </div>
+            </details>
+          </div>
+        </form>
+      </main>
+
+      <!-- Column 2: Question Library (Middle) -->
+      <section class="question-library-panel card">
+        <div class="panel-header-row">
+          <h2 class="section-title">Question Bank</h2>
+          <span id="library-count-badge" class="badge secondary-badge">0 matching</span>
+        </div>
+        
+        <div class="library-search-bar-wrapper">
+          <input type="text" id="library-search" placeholder="Search question text..." class="search-input">
+        </div>
+
+        <div id="questions-library-container" class="questions-library-scroll">
+          <p class="info-text">Select subtopics or adjust filters to view available questions.</p>
+        </div>
+      </section>
+
+      <!-- Column 3: Test Assembler / Summary (Right) -->
+      <aside class="action-panel test-assembler-panel">
+        <div class="card stat-card assembler-card">
+          <h2 class="section-title">Test Paper Draft</h2>
+          
+          <div class="stats-grid">
+            <div class="stat-box">
+              <span class="stat-label">Total Marks</span>
+              <span id="total-marks-display" class="stat-value">0</span>
+            </div>
+            <div class="stat-box">
+              <span class="stat-label">Questions</span>
+              <span id="selected-questions-count" class="stat-value">0</span>
+            </div>
+          </div>
+
+          <div class="selected-details draft-list-container" id="selected-details-list">
+            <p class="empty-selection-msg">No questions selected yet. Add questions from the Question Bank.</p>
+          </div>
+
+          <!-- Custom Branding Uploads -->
           <div class="branding-section">
             <h3 class="subsection-title">Custom Branding (Optional)</h3>
             <div class="upload-grid">
               <div class="upload-box" id="header-upload-box">
                 <input type="file" id="header-image-input" accept="image/*" class="file-input">
                 <div class="upload-placeholder">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="upload-icon"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="upload-icon"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
                   <span>Upload Header</span>
                 </div>
                 <div class="preview-area" id="header-preview"></div>
@@ -92,35 +183,24 @@
               <div class="upload-box" id="footer-upload-box">
                 <input type="file" id="footer-image-input" accept="image/*" class="file-input">
                 <div class="upload-placeholder">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="upload-icon"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="upload-icon"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
                   <span>Upload Footer</span>
                 </div>
                 <div class="preview-area" id="footer-preview"></div>
               </div>
             </div>
           </div>
-        </form>
-      </main>
 
-      <!-- Right Column: Status & Import Panel -->
-      <aside class="action-panel">
-        <!-- Live Statistics Card -->
-        <div class="card stat-card">
-          <h2 class="section-title">Generation Summary</h2>
-          
-          <div class="stats-grid">
-            <div class="stat-box">
-              <span class="stat-label">Total Marks</span>
-              <span id="total-marks-display" class="stat-value">0</span>
+          <!-- Randomize Option -->
+          <div class="form-group toggle-group" style="margin-top: 15px; margin-bottom: 15px;">
+            <div class="toggle-description">
+              <label for="randomize-toggle" style="font-weight: 600; font-size: 0.85rem; display: block; color: var(--text-primary);">Shuffle Final Output</label>
+              <p class="help-text" style="font-size: 0.75rem; color: var(--text-muted);">Shuffle questions in final generated PDF</p>
             </div>
-            <div class="stat-box">
-              <span class="stat-label">Selected Topics</span>
-              <span id="selected-topics-count" class="stat-value">0</span>
-            </div>
-          </div>
-
-          <div class="selected-details" id="selected-details-list">
-            <p class="empty-selection-msg">No questions selected yet.</p>
+            <label class="switch">
+              <input type="checkbox" id="randomize-toggle">
+              <span class="toggle-slider"></span>
+            </label>
           </div>
 
           <div class="error-container hidden" id="validation-error-box">
@@ -128,12 +208,16 @@
             <span id="error-message-text">Error occurred</span>
           </div>
 
-          <button id="generate-btn" class="btn btn-primary" disabled>
-            <span class="btn-text">Generate Paired PDFs</span>
-            <div class="spinner hidden"></div>
-          </button>
+          <div class="button-row" style="display: flex; gap: 10px; margin-top: 15px;">
+            <button id="clear-test-btn" class="btn btn-outline" onclick="clearDraft()" style="flex: 1; padding: 12px 6px;">
+              <span class="btn-text">Clear Draft</span>
+            </button>
+            <button id="generate-btn" class="btn btn-primary" onclick="generateExamPaper()" style="flex: 2; padding: 12px 6px;" disabled>
+              <span class="btn-text">Generate PDFs</span>
+              <div class="spinner hidden"></div>
+            </button>
+          </div>
         </div>
-
       </aside>
     </div>
   </div>
@@ -253,6 +337,6 @@
   <!-- Toast Notification Container -->
   <div id="toast-container" class="toast-container"></div>
 
-  <script src="app.js?v=1.4"></script>
+  <script src="app.js?v=1.5"></script>
 </body>
 </html>

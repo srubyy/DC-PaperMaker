@@ -1,6 +1,17 @@
+// Global error reporting boundary
+window.onerror = function(message, source, lineno, colno, error) {
+  const cleanSource = source ? source.split('/').pop() : 'script';
+  if (typeof showToast === 'function') {
+    showToast(`JS Error: ${message} (in ${cleanSource}:${lineno})`, 'danger');
+  }
+  return false;
+};
+
 // Global State
 let selectedSubject = '';
-let questionsMetadata = []; // [{ id, topic, subtopic, year, marks }]
+let questionsMetadata = []; 
+let allQuestions = []; // [{ id, subject, topic, subtopic, year, marks, difficulty, question_text, answer_text, ... }]
+let selectedQuestionIds = []; // Ordered array of selected question IDs
 let availableTopics = [];
 let subtopicsGrouped = {};
 let headerBase64 = null;
@@ -24,23 +35,98 @@ const footerPreview = document.getElementById('footer-preview');
 
 const topicsListContainer = document.getElementById('topics-list-container');
 const totalMarksDisplay = document.getElementById('total-marks-display');
-const selectedTopicsCount = document.getElementById('selected-topics-count');
+const selectedQuestionsCount = document.getElementById('selected-questions-count');
 const selectedDetailsList = document.getElementById('selected-details-list');
 
 const validationErrorBox = document.getElementById('validation-error-box');
 const errorMessageText = document.getElementById('error-message-text');
 const generateBtn = document.getElementById('generate-btn');
+const clearTestBtn = document.getElementById('clear-test-btn');
+
+// Library Elements
+const questionsLibraryContainer = document.getElementById('questions-library-container');
+const libraryCountBadge = document.getElementById('library-count-badge');
+const librarySearch = document.getElementById('library-search');
+
+// Filter Checkboxes
+const diffEasy = document.getElementById('diff-easy');
+const diffMedium = document.getElementById('diff-medium');
+const diffHard = document.getElementById('diff-hard');
+
+const typeMcq = document.getElementById('type-mcq');
+const typeShort = document.getElementById('type-short');
+const typeStructured = document.getElementById('type-structured');
+const typeEssay = document.getElementById('type-essay');
+
+// Importer elements
+const csvDropZone = document.getElementById('csv-dropzone');
+const csvFileInput = document.getElementById('csv-file-input');
 
 // Initialize Page
 window.addEventListener('DOMContentLoaded', () => {
-  loadSubjects();
-  setupYearSliders();
-  setupImageUploads();
-  checkAuth();
-  setupAuthEventListeners();
+  // Submit & Clear actions registered first to guarantee responsiveness
+  if (generateBtn) {
+    generateBtn.addEventListener('click', generateExamPaper);
+  }
+  if (clearTestBtn) {
+    clearTestBtn.addEventListener('click', clearDraft);
+  }
+
+  // Load other initializations safely with try-catch blocks to prevent load halts
+  try {
+    loadSubjects();
+  } catch (e) {
+    console.error("loadSubjects init failed:", e);
+  }
+
+  try {
+    setupYearSliders();
+  } catch (e) {
+    console.error("setupYearSliders init failed:", e);
+  }
+
+  try {
+    setupImageUploads();
+  } catch (e) {
+    console.error("setupImageUploads init failed:", e);
+  }
+
+  try {
+    checkAuth();
+  } catch (e) {
+    console.error("checkAuth init failed:", e);
+  }
+
+  try {
+    setupAuthEventListeners();
+  } catch (e) {
+    console.error("setupAuthEventListeners init failed:", e);
+  }
+
+  try {
+    setupCsvImporter();
+  } catch (e) {
+    console.error("setupCsvImporter init failed:", e);
+  }
   
-  // Submit action
-  generateBtn.addEventListener('click', generateExamPaper);
+  // Filter change actions safely
+  [diffEasy, diffMedium, diffHard, typeMcq, typeShort, typeStructured, typeEssay].forEach(chk => {
+    if (chk) {
+      try {
+        chk.addEventListener('change', renderQuestionLibrary);
+      } catch (e) {
+        console.error("Filter change listener registration failed:", e);
+      }
+    }
+  });
+
+  if (librarySearch) {
+    try {
+      librarySearch.addEventListener('input', renderQuestionLibrary);
+    } catch (e) {
+      console.error("Search input listener registration failed:", e);
+    }
+  }
 });
 
 // Setup Double Range Year Slider
@@ -61,8 +147,8 @@ function setupYearSliders() {
     sliderTrack.style.background = `linear-gradient(to right, rgba(51, 65, 85, 0.5) ${percent1}%, var(--color-accent) ${percent1}%, var(--color-accent) ${percent2}%, rgba(51, 65, 85, 0.5) ${percent2}%)`;
     yearDisplay.textContent = `${yearMinInput.value} - ${yearMaxInput.value}`;
     
-    // Recalculate local validations
-    validateAndCalculate();
+    // Rerender/Filter Library
+    renderQuestionLibrary();
   }
 
   yearMinInput.addEventListener('input', updateSlider);
@@ -98,42 +184,53 @@ async function loadSubjects() {
   }
 }
 
-// Load Metadata for Selected Subject
+// Load Metadata & Questions for Selected Subject
 async function loadSubjectMetadata(subject) {
   try {
     topicsListContainer.innerHTML = '<p class="info-text">Loading topics...</p>';
+    questionsLibraryContainer.innerHTML = '<p class="info-text">Loading question bank...</p>';
     
-    const res = await fetch(`/api/metadata?subject=${encodeURIComponent(subject)}`);
-    if (!res.ok) throw new Error('Failed to fetch');
-    const data = await res.json();
+    // Fetch subject schema metadata
+    const resMeta = await fetch(`/api/metadata?subject=${encodeURIComponent(subject)}`);
+    if (!resMeta.ok) throw new Error('Failed to fetch metadata');
+    const metaData = await resMeta.json();
 
-    subtopicsGrouped = data.subtopicsGrouped || {};
-    questionsMetadata = data.questions;
+    subtopicsGrouped = metaData.subtopicsGrouped || {};
+    availableTopics = metaData.topics;
+
+    // Fetch detailed questions for library
+    const resQuest = await fetch(`/api/questions?subject=${encodeURIComponent(subject)}`);
+    if (!resQuest.ok) throw new Error('Failed to fetch questions details');
+    allQuestions = await resQuest.json();
 
     // Reset range sliders to subject boundaries
-    yearMinInput.min = data.minYear;
-    yearMinInput.max = data.maxYear;
-    yearMinInput.value = data.minYear;
+    yearMinInput.min = metaData.minYear;
+    yearMinInput.max = metaData.maxYear;
+    yearMinInput.value = metaData.minYear;
 
-    yearMaxInput.min = data.minYear;
-    yearMaxInput.max = data.maxYear;
-    yearMaxInput.value = data.maxYear;
+    yearMaxInput.min = metaData.minYear;
+    yearMaxInput.max = metaData.maxYear;
+    yearMaxInput.value = metaData.maxYear;
 
     // Update Slider track color
-    const min = data.minYear;
-    const max = data.maxYear;
+    const min = metaData.minYear;
+    const max = metaData.maxYear;
     sliderTrack.style.background = `linear-gradient(to right, var(--color-accent) 0%, var(--color-accent) 100%)`;
     yearDisplay.textContent = `${min} - ${max}`;
 
-    availableTopics = data.topics;
+    selectedQuestionIds = []; // clear draft on subject switch
+
     renderNestedTopicsList();
+    renderQuestionLibrary();
+    renderTestAssembler();
   } catch (err) {
-    showToast('Failed to load subject topics.', 'danger');
+    showToast('Failed to load subject information.', 'danger');
     topicsListContainer.innerHTML = '<p class="info-text text-danger">Error loading topics.</p>';
+    questionsLibraryContainer.innerHTML = '<p class="info-text text-danger">Error loading question bank.</p>';
   }
 }
 
-// Render Checkboxes and Quantities for Nested Syllabus Areas (Tier 1 & Tier 2)
+// Render Checkboxes for Nested Syllabus Areas (Tier 1 & Tier 2)
 function renderNestedTopicsList() {
   const topics = Object.keys(subtopicsGrouped);
   if (topics.length === 0) {
@@ -175,15 +272,12 @@ function renderNestedTopicsList() {
       subtopicItem.id = `item-${subId}`;
       subtopicItem.innerHTML = `
         <label class="subtopic-checkbox-label" for="chk-${subId}">
-          <input type="checkbox" id="chk-${subId}" data-module="${topic}" data-subtopic="${sub}" class="subtopic-checkbox">
+          <input type="checkbox" id="chk-${subId}" data-module="${topic}" data-subtopic="${sub}" class="subtopic-checkbox" checked>
           <div style="display: flex; flex-direction: column;">
             <span class="subtopic-name">${sub}</span>
             <span class="subtopic-avail-badge" id="avail-${subId}">available: 0</span>
           </div>
         </label>
-        <div class="subtopic-control">
-          <input type="number" id="qty-${subId}" data-module="${topic}" data-subtopic="${sub}" class="qty-input" min="1" value="1" disabled>
-        </div>
       `;
       subListDiv.appendChild(subtopicItem);
     });
@@ -193,7 +287,7 @@ function renderNestedTopicsList() {
     topicsListContainer.appendChild(moduleDiv);
   });
 
-  // Attach Toggle Listeners
+  // Expand / collapse subtopic group
   document.querySelectorAll('.expand-toggle').forEach(btn => {
     btn.addEventListener('click', (e) => {
       const modId = e.target.dataset.moduleId;
@@ -208,8 +302,9 @@ function renderNestedTopicsList() {
     });
   });
 
-  // Attach Module Checkbox (Tier 1) Listeners - Toggles all sub-topics under it
+  // Parent topic checkbox toggles all children
   document.querySelectorAll('.module-checkbox').forEach(chk => {
+    chk.checked = true; // default all checked
     chk.addEventListener('change', (e) => {
       const isChecked = e.target.checked;
       const topic = e.target.dataset.module;
@@ -219,40 +314,32 @@ function renderNestedTopicsList() {
       subList.querySelectorAll('.subtopic-checkbox').forEach(subChk => {
         subChk.checked = isChecked;
         const subId = cleanId(subChk.dataset.subtopic);
-        const qtyInput = document.getElementById(`qty-${subId}`);
         const itemDiv = document.getElementById(`item-${subId}`);
-        
-        qtyInput.disabled = !isChecked;
         if (isChecked) {
           itemDiv.classList.add('selected');
         } else {
           itemDiv.classList.remove('selected');
-          itemDiv.classList.remove('error-state');
         }
       });
       
-      validateAndCalculate();
+      renderQuestionLibrary();
     });
   });
 
-  // Attach Sub-Topic Checkbox (Tier 2) Listeners
+  // Child subtopic checkbox updates parent checkbox
   document.querySelectorAll('.subtopic-checkbox').forEach(chk => {
+    const subId = cleanId(chk.dataset.subtopic);
+    const itemDiv = document.getElementById(`item-${subId}`);
+    itemDiv.classList.add('selected'); // default checked/selected
+
     chk.addEventListener('change', (e) => {
       const isChecked = e.target.checked;
-      const subtopic = e.target.dataset.subtopic;
-      const subId = cleanId(subtopic);
-      const qtyInput = document.getElementById(`qty-${subId}`);
-      const itemDiv = document.getElementById(`item-${subId}`);
-      
-      qtyInput.disabled = !isChecked;
       if (isChecked) {
         itemDiv.classList.add('selected');
       } else {
         itemDiv.classList.remove('selected');
-        itemDiv.classList.remove('error-state');
       }
 
-      // Check if all subtopics in this module are checked/unchecked to update parent checkbox
       const topic = e.target.dataset.module;
       const topicId = cleanId(topic);
       const parentChk = document.getElementById(`mod-chk-${topicId}`);
@@ -271,120 +358,278 @@ function renderNestedTopicsList() {
         parentChk.indeterminate = true;
       }
       
-      validateAndCalculate();
+      renderQuestionLibrary();
     });
   });
-
-  // Attach Quantity Input (Tier 3) Listeners
-  document.querySelectorAll('.qty-input').forEach(input => {
-    input.addEventListener('input', validateAndCalculate);
-  });
-
-  // Initial Calculation
-  validateAndCalculate();
 }
 
-// Perform Live Calculations & Validation Checks on Client
-function validateAndCalculate() {
+// Clean ID for DOM manipulation
+function cleanId(str) {
+  return str.replace(/[^a-zA-Z0-9]/g, '_');
+}
+
+// Escape HTML utility
+function escapeHtml(text) {
+  if (!text) return '';
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+// Format rich text questions/answers with joined Math slices in the library preview
+function formatRichText(text, subject, isMarkScheme = false) {
+  let escaped = escapeHtml(text);
+  const imageRegex = /\[IMAGE:\s*([^\]\s]+)\]/gi;
+  
+  let lastIndex = 0;
+  let result = '';
+  let match;
+  let consecutiveImages = [];
+  
+  const flushImages = () => {
+    if (consecutiveImages.length === 0) return '';
+    
+    const hasMathSlice = consecutiveImages.some(url => url.includes('math_0580') || subject === 'Mathematics');
+    
+    if (hasMathSlice) {
+      const imgTags = consecutiveImages.map(url => {
+        return `<img src="${url}" style="width: 100%; display: block; margin: 0; padding: 0; border: none; box-shadow: none; background-color: #ffffff;" />`;
+      }).join('');
+      consecutiveImages = [];
+      return `
+        <div class="embedded-math-slices" style="margin-top: 5px; margin-bottom: 5px; line-height: 0; font-size: 0; text-align: left; border: none; padding: 0; background: transparent; box-shadow: none; display: flex; flex-direction: column;">
+          ${imgTags}
+        </div>`;
+    } else {
+      const rendered = consecutiveImages.map(url => {
+        return `
+          <div class="embedded-image-container" style="margin: 15px 0; text-align: center;">
+            <img src="${url}" style="max-width: 95%; max-height: 200px; object-fit: contain; border: 1px solid var(--border-color, #e2e8f0); border-radius: 6px; padding: 6px; background-color: #ffffff;" />
+          </div>`;
+      }).join('');
+      consecutiveImages = [];
+      return rendered;
+    }
+  };
+
+  imageRegex.lastIndex = 0;
+  while ((match = imageRegex.exec(escaped)) !== null) {
+    const textBefore = escaped.substring(lastIndex, match.index);
+    if (textBefore.trim().length > 0) {
+      result += flushImages();
+      result += textBefore.replace(/\n/g, '<br>');
+    }
+    const url = match[1].replace(/&amp;/g, '&');
+    consecutiveImages.push(url);
+    lastIndex = imageRegex.lastIndex;
+  }
+  
+  result += flushImages();
+  if (lastIndex < escaped.length) {
+    result += escaped.substring(lastIndex).replace(/\n/g, '<br>');
+  }
+  return result;
+}
+
+// Render available questions in Column 2 (Middle)
+function renderQuestionLibrary() {
   if (!selectedSubject) {
-    updateSummaryUI(0, 0, []);
-    disableGenerate('Please select a subject first.');
+    questionsLibraryContainer.innerHTML = '<p class="info-text">Please select a subject to load available questions.</p>';
+    libraryCountBadge.textContent = '0 matching';
     return;
   }
 
-  const subtopicCheckboxes = document.querySelectorAll('.subtopic-checkbox');
-  if (subtopicCheckboxes.length === 0) {
-    updateSummaryUI(0, 0, []);
-    disableGenerate('No subtopics loaded.');
-    return;
-  }
+  const minYear = parseInt(yearMinInput.value);
+  const maxYear = parseInt(yearMaxInput.value);
+  const searchText = librarySearch ? librarySearch.value.trim().toLowerCase() : '';
 
-  const yearMin = parseInt(yearMinInput.value);
-  const yearMax = parseInt(yearMaxInput.value);
-  let totalMarks = 0;
-  let selectedCount = 0;
-  let validationErrors = [];
-  let summaryDetails = [];
+  // Active difficulty checklist
+  const allowedDiffs = [];
+  if (diffEasy && diffEasy.checked) allowedDiffs.push('Easy');
+  if (diffMedium && diffMedium.checked) allowedDiffs.push('Medium');
+  if (diffHard && diffHard.checked) allowedDiffs.push('Hard');
 
-  subtopicCheckboxes.forEach(chk => {
-    const topic = chk.dataset.module;
+  // Active question type checklist
+  const allowedTypes = [];
+  if (typeMcq && typeMcq.checked) allowedTypes.push('MCQ');
+  if (typeShort && typeShort.checked) allowedTypes.push('Short Answer');
+  if (typeStructured && typeStructured.checked) allowedTypes.push('Structured');
+  if (typeEssay && typeEssay.checked) allowedTypes.push('Essay');
+
+  // Active subtopics list from checkboxes
+  const checkedSubtopics = new Set();
+  document.querySelectorAll('.subtopic-checkbox:checked').forEach(chk => {
+    checkedSubtopics.add(chk.dataset.subtopic);
+  });
+
+  // Calculate available counts per subtopic in-situ
+  document.querySelectorAll('.subtopic-checkbox').forEach(chk => {
     const sub = chk.dataset.subtopic;
     const subId = cleanId(sub);
-    const qtyInput = document.getElementById(`qty-${subId}`);
     const availBadge = document.getElementById(`avail-${subId}`);
-    const itemDiv = document.getElementById(`item-${subId}`);
+    
+    // Available count based on current year, difficulty, type filters
+    const subCount = allQuestions.filter(q => {
+      const matchSub = q.subtopic === sub;
+      const matchYear = q.year >= minYear && q.year <= maxYear;
+      const matchDiff = allowedDiffs.includes(q.difficulty);
+      const matchType = allowedTypes.includes(q.question_type);
+      return matchSub && matchYear && matchDiff && matchType;
+    }).length;
 
-    // Filter metadata to find available questions in selected scope
-    const availableQuestions = questionsMetadata.filter(q => {
-      return q.topic === topic && q.subtopic === sub && q.year >= yearMin && q.year <= yearMax;
-    });
-
-    const availableCount = availableQuestions.length;
     if (availBadge) {
-      availBadge.textContent = `available: ${availableCount}`;
-    }
-
-    if (chk.checked) {
-      const requestedQty = parseInt(qtyInput.value, 10) || 0;
-      selectedCount++;
-
-      // Check overflow error
-      if (requestedQty > availableCount) {
-        if (itemDiv) itemDiv.classList.add('error-state');
-        validationErrors.push(`Sub-Topic "${sub}": requested ${requestedQty} questions, but only ${availableCount} available.`);
-      } else if (requestedQty <= 0) {
-        if (itemDiv) itemDiv.classList.add('error-state');
-        validationErrors.push(`Sub-Topic "${sub}": requested count must be at least 1.`);
-      } else {
-        if (itemDiv) itemDiv.classList.remove('error-state');
-        
-        // Sum marks of the first N questions (sorted by ID for stability)
-        const sortedSubset = [...availableQuestions]
-          .sort((a, b) => a.id.localeCompare(b.id))
-          .slice(0, requestedQty);
-          
-        const subsetMarks = sortedSubset.reduce((sum, q) => sum + q.marks, 0);
-        totalMarks += subsetMarks;
-
-        summaryDetails.push({ topic: sub, qty: requestedQty });
-      }
-    } else {
-      if (itemDiv) itemDiv.classList.remove('error-state');
+      availBadge.textContent = `available: ${subCount}`;
     }
   });
 
-  // Render Selection Summary List
-  updateSummaryUI(totalMarks, selectedCount, summaryDetails);
+  // Filter all questions
+  const filteredQuestions = allQuestions.filter(q => {
+    const matchSubtopic = checkedSubtopics.has(q.subtopic);
+    const matchYear = q.year >= minYear && q.year <= maxYear;
+    const matchDiff = allowedDiffs.includes(q.difficulty);
+    const matchType = allowedTypes.includes(q.question_type);
+    
+    let matchSearch = true;
+    if (searchText) {
+      matchSearch = q.question_text.toLowerCase().includes(searchText) || 
+                    q.id.toLowerCase().includes(searchText) || 
+                    q.subtopic.toLowerCase().includes(searchText);
+    }
 
-  // Form level checks
-  if (selectedCount === 0) {
-    disableGenerate('Please select at least one subtopic and count.');
-  } else if (validationErrors.length > 0) {
-    disableGenerate(validationErrors[0]);
-  } else {
-    enableGenerate();
-  }
-}
+    return matchSubtopic && matchYear && matchDiff && matchType && matchSearch;
+  });
 
-// Update Summary Panel UI
-function updateSummaryUI(marks, topicsCount, details) {
-  totalMarksDisplay.textContent = marks;
-  selectedTopicsCount.textContent = topicsCount;
+  libraryCountBadge.textContent = `${filteredQuestions.length} matching`;
 
-  if (details.length === 0) {
-    selectedDetailsList.innerHTML = '<p class="empty-selection-msg">No questions selected yet.</p>';
+  if (filteredQuestions.length === 0) {
+    questionsLibraryContainer.innerHTML = '<p class="info-text">No questions match the current filters.</p>';
     return;
   }
 
-  selectedDetailsList.innerHTML = details.map(item => `
-    <div class="detail-row">
-      <span class="detail-topic">${item.topic}</span>
-      <span class="detail-qty">${item.qty} ${item.qty === 1 ? 'question' : 'questions'}</span>
-    </div>
-  `).join('');
+  questionsLibraryContainer.innerHTML = filteredQuestions.map(q => {
+    const isAdded = selectedQuestionIds.includes(q.id);
+    const btnText = isAdded ? 'Remove' : 'Add to Test';
+    const btnClass = isAdded ? 'btn-remove' : 'btn-add';
+    const diffClass = `badge-${q.difficulty.toLowerCase()}`;
+
+    const cleanText = formatRichText(q.question_text, selectedSubject, false);
+    const cleanAnswer = formatRichText(q.answer_text, selectedSubject, true);
+
+    return `
+      <div class="question-card" id="card-${cleanId(q.id)}">
+        <div class="question-card-header">
+          <span class="question-card-id">${q.id}</span>
+          <div class="question-card-badges">
+            <span class="badge ${diffClass}">${q.difficulty}</span>
+            <span class="badge badge-type">${q.question_type}</span>
+            <span class="badge badge-year">${q.year}</span>
+            <span class="badge badge-marks">${q.marks} Marks</span>
+          </div>
+        </div>
+        <div class="question-card-body">${cleanText}</div>
+        <div class="question-card-footer">
+          <span class="question-card-subtopic">${q.subtopic}</span>
+          <button class="btn question-action-btn ${btnClass}" onclick="toggleQuestionSelection('${q.id}')">
+            ${btnText}
+          </button>
+        </div>
+        <details class="model-answer-details">
+          <summary class="model-answer-summary">Model Answer / Mark Scheme</summary>
+          <div class="model-answer-content">${cleanAnswer}</div>
+        </details>
+      </div>
+    `;
+  }).join('');
 }
 
-// Enable/Disable Submit Button
+// Global toggle question action
+window.toggleQuestionSelection = function(id) {
+  const index = selectedQuestionIds.indexOf(id);
+  if (index === -1) {
+    selectedQuestionIds.push(id);
+    showToast(`Added ${id} to test.`, 'success');
+  } else {
+    selectedQuestionIds.splice(index, 1);
+    showToast(`Removed ${id} from test.`, 'info');
+  }
+  renderQuestionLibrary();
+  renderTestAssembler();
+};
+
+// Render chosen questions in Right Sidebar Assembly panel
+function renderTestAssembler() {
+  if (selectedQuestionsCount) {
+    selectedQuestionsCount.textContent = selectedQuestionIds.length;
+  }
+  
+  if (selectedQuestionIds.length === 0) {
+    selectedDetailsList.innerHTML = '<p class="empty-selection-msg">No questions selected yet. Add questions from the Question Bank.</p>';
+    totalMarksDisplay.textContent = '0';
+    disableGenerate('Please add at least one question to the test.');
+    return;
+  }
+
+  // Calculate sum of marks
+  let totalMarks = 0;
+  const draftHtml = selectedQuestionIds.map((id, index) => {
+    const q = allQuestions.find(item => item.id === id);
+    if (!q) return '';
+    totalMarks += q.marks;
+
+    const isFirst = index === 0;
+    const isLast = index === selectedQuestionIds.length - 1;
+
+    return `
+      <div class="selected-question-item">
+        <div class="selected-question-info">
+          <span class="selected-question-id">Q${index + 1}: ${q.id}</span>
+          <span class="selected-question-meta">${q.marks} Marks | ${q.subtopic}</span>
+        </div>
+        <div class="selected-question-actions">
+          <button class="reorder-btn" onclick="reorderQuestion('${q.id}', 'up')" ${isFirst ? 'disabled' : ''} aria-label="Move Up">
+            ▲
+          </button>
+          <button class="reorder-btn" onclick="reorderQuestion('${q.id}', 'down')" ${isLast ? 'disabled' : ''} aria-label="Move Down">
+            ▼
+          </button>
+          <button class="delete-question-btn" onclick="toggleQuestionSelection('${q.id}')" aria-label="Delete">
+            ×
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  totalMarksDisplay.textContent = totalMarks;
+  selectedDetailsList.innerHTML = draftHtml;
+  enableGenerate();
+}
+
+// Reorder draft questions array
+window.reorderQuestion = function(id, direction) {
+  const index = selectedQuestionIds.indexOf(id);
+  if (index === -1) return;
+  if (direction === 'up' && index > 0) {
+    [selectedQuestionIds[index], selectedQuestionIds[index - 1]] = [selectedQuestionIds[index - 1], selectedQuestionIds[index]];
+  } else if (direction === 'down' && index < selectedQuestionIds.length - 1) {
+    [selectedQuestionIds[index], selectedQuestionIds[index + 1]] = [selectedQuestionIds[index + 1], selectedQuestionIds[index]];
+  }
+  renderQuestionLibrary();
+  renderTestAssembler();
+};
+
+// Clear Test Draft
+function clearDraft() {
+  selectedQuestionIds = [];
+  renderQuestionLibrary();
+  renderTestAssembler();
+  showToast('Test draft cleared.', 'info');
+}
+
+// Enable/Disable generate trigger
 function disableGenerate(errorMessage) {
   generateBtn.disabled = true;
   validationErrorBox.classList.remove('hidden');
@@ -396,37 +641,14 @@ function enableGenerate() {
   validationErrorBox.classList.add('hidden');
 }
 
-// Clean ID for DOM manipulation
-function cleanId(str) {
-  return str.replace(/[^a-zA-Z0-9]/g, '_');
-}
-
 // Generate Paired PDF API Request
 async function generateExamPaper() {
   const spinner = generateBtn.querySelector('.spinner');
   const btnText = generateBtn.querySelector('.btn-text');
 
   try {
-    // Collect selected subtopics into ExamBlueprint
-    const ExamBlueprint = [];
-    document.querySelectorAll('.subtopic-checkbox:checked').forEach(chk => {
-      const topic = chk.dataset.module;
-      const subtopic = chk.dataset.subtopic;
-      const subId = cleanId(subtopic);
-      const qtyInput = document.getElementById(`qty-${subId}`);
-      const qty = parseInt(qtyInput.value, 10) || 0;
-      
-      if (qty > 0) {
-        ExamBlueprint.push({
-          topic,
-          subtopic,
-          count: qty
-        });
-      }
-    });
-
-    if (ExamBlueprint.length === 0) {
-      showToast('Please select at least one subtopic.', 'danger');
+    if (selectedQuestionIds.length === 0) {
+      showToast('Please select at least one question.', 'danger');
       return;
     }
 
@@ -437,7 +659,7 @@ async function generateExamPaper() {
 
     const payload = {
       subject: selectedSubject,
-      ExamBlueprint,
+      questionIds: selectedQuestionIds,
       yearMin: parseInt(yearMinInput.value),
       yearMax: parseInt(yearMaxInput.value),
       randomize: randomizeToggle.checked,
@@ -457,7 +679,7 @@ async function generateExamPaper() {
       // Reset loading state
       generateBtn.disabled = false;
       spinner.classList.add('hidden');
-      btnText.textContent = 'Generate Paired PDFs';
+      btnText.textContent = 'Generate PDFs';
       return;
     }
 
@@ -475,8 +697,10 @@ async function generateExamPaper() {
     a.download = `Direction_Classes_${selectedSubject.replace(/\s+/g, '_')}_Exam.zip`;
     document.body.appendChild(a);
     a.click();
-    window.URL.revokeObjectURL(url);
-    document.body.removeChild(a);
+    setTimeout(() => {
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    }, 100);
 
     showToast('Exam packages downloaded successfully!', 'success');
   } catch (err) {
@@ -485,8 +709,8 @@ async function generateExamPaper() {
   } finally {
     generateBtn.disabled = false;
     spinner.classList.add('hidden');
-    btnText.textContent = 'Generate Paired PDFs';
-    validateAndCalculate();
+    btnText.textContent = 'Generate PDFs';
+    renderTestAssembler();
   }
 }
 
@@ -1014,4 +1238,7 @@ function setupPasswordToggle(inputId, toggleId) {
   });
 }
 
+// Expose key actions globally to guarantee HTML inline onclick handlers work
+window.generateExamPaper = generateExamPaper;
+window.clearDraft = clearDraft;
 
