@@ -597,8 +597,11 @@ app.post('/api/generate', async (req, res) => {
     // Generate total marks
     const totalMarks = processedQuestions.reduce((sum, q) => sum + q.marks, 0);
 
+    let questionPaperHtml = '';
+    let markSchemeHtml = '';
+
     // Build HTML for Question Paper
-    const questionPaperHtml = buildPaperHtml({
+    questionPaperHtml = buildPaperHtml({
       subject,
       title: `${subject} Examination`,
       subtitle: `Question Paper`,
@@ -612,7 +615,7 @@ app.post('/api/generate', async (req, res) => {
     });
 
     // Build HTML for Mark Scheme
-    const markSchemeHtml = buildPaperHtml({
+    markSchemeHtml = buildPaperHtml({
       subject,
       title: `${subject} Examination`,
       subtitle: `Mark Scheme`,
@@ -626,113 +629,128 @@ app.post('/api/generate', async (req, res) => {
     });
 
     // Render PDFs using Puppeteer
-    const browser = await getBrowser();
+    let browser;
+    try {
+      browser = await getBrowser();
 
-    const [qpPdf, msPdf] = await Promise.all([
-      renderPdf(browser, questionPaperHtml, subject, 'Question Paper', headerImage, footerImage),
-      renderPdf(browser, markSchemeHtml, subject, 'Mark Scheme', headerImage, footerImage)
-    ]);
+      const [qpPdf, msPdf] = await Promise.all([
+        renderPdf(browser, questionPaperHtml, subject, 'Question Paper', headerImage, footerImage),
+        renderPdf(browser, markSchemeHtml, subject, 'Mark Scheme', headerImage, footerImage)
+      ]);
 
-    await browser.close();
+      await browser.close();
+      browser = null;
 
-    // Pack into a ZIP file
-    res.setHeader('Content-Type', 'application/zip');
-    res.setHeader('Content-Disposition', `attachment; filename="Direction_Classes_${subject.replace(/\s+/g, '_')}_Exam.zip"`);
+      // Pack into a ZIP file
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="Direction_Classes_${subject.replace(/\s+/g, '_')}_Exam.zip"`);
 
-    const archive = archiver('zip', { zlib: { level: 9 } });
-    archive.on('error', (err) => {
-      throw err;
-    });
+      const archive = archiver('zip', { zlib: { level: 9 } });
+      archive.on('error', (err) => {
+        throw err;
+      });
 
-    archive.pipe(res);
-    archive.append(qpPdf, { name: 'Question_Paper.pdf' });
-    archive.append(msPdf, { name: 'Mark_Scheme.pdf' });
-    await archive.finalize();
-    console.log(`[generate] ZIP generated and sent successfully for subject: "${subject}"`);
+      archive.pipe(res);
+      archive.append(qpPdf, { name: 'Question_Paper.pdf' });
+      archive.append(msPdf, { name: 'Mark_Scheme.pdf' });
+      await archive.finalize();
+      console.log(`[generate] ZIP generated and sent successfully for subject: "${subject}"`);
+    } finally {
+      if (browser) {
+        try { await browser.close(); } catch (e) {}
+      }
+    }
 
   } catch (error) {
     console.error("PDF generation via Puppeteer failed, falling back to client-side renderer:", error.message);
-    return res.json({
-      fallbackHtml: true,
-      subject,
-      questionPaperHtml,
-      markSchemeHtml
-    });
+    if (questionPaperHtml && markSchemeHtml) {
+      return res.json({
+        fallbackHtml: true,
+        subject,
+        questionPaperHtml,
+        markSchemeHtml
+      });
+    } else {
+      return res.status(500).json({ error: error.message || 'Failed to generate PDF documents.' });
+    }
   }
 });
 
 // Helper: Render HTML to PDF via Puppeteer
 async function renderPdf(browser, html, subject, documentType, headerImage, footerImage) {
   const page = await browser.newPage();
-  await page.setContent(html, { waitUntil: 'networkidle0' });
+  try {
+    await page.setContent(html, { waitUntil: 'domcontentloaded' });
 
-  // Design Puppeteer Header Template
-  let headerTemplate = '';
-  if (headerImage) {
-    headerTemplate = `
-      <style>
-        html { -webkit-print-color-adjust: exact; }
-        #header { 
-          padding: 0 !important; 
-          margin: 0 !important; 
-          width: 100% !important;
-          height: 75px !important;
-        }
-      </style>
-      <div style="width: 100%; height: 75px; position: relative; margin: 0; padding: 0;">
-        <img src="${headerImage}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: fill; z-index: -1;" />
-      </div>`;
-  } else {
-    headerTemplate = `
-      <div style="font-size: 9px; font-family: Helvetica, Arial, sans-serif; width: 100%; display: flex; justify-content: space-between; border-bottom: 1px solid #ddd; padding: 15px 50px 5px 50px; box-sizing: border-box; color: #666;">
-        <span style="font-weight: bold; text-transform: uppercase;">Direction Classes</span>
-        <span>${subject} - ${documentType}</span>
-      </div>`;
+    // Design Puppeteer Header Template
+    let headerTemplate = '';
+    if (headerImage) {
+      headerTemplate = `
+        <style>
+          html { -webkit-print-color-adjust: exact; }
+          #header { 
+            padding: 0 !important; 
+            margin: 0 !important; 
+            width: 100% !important;
+            height: 75px !important;
+          }
+        </style>
+        <div style="width: 100%; height: 75px; position: relative; margin: 0; padding: 0;">
+          <img src="${headerImage}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: fill; z-index: -1;" />
+        </div>`;
+    } else {
+      headerTemplate = `
+        <div style="font-size: 9px; font-family: Helvetica, Arial, sans-serif; width: 100%; display: flex; justify-content: space-between; border-bottom: 1px solid #ddd; padding: 15px 50px 5px 50px; box-sizing: border-box; color: #666;">
+          <span style="font-weight: bold; text-transform: uppercase;">Direction Classes</span>
+          <span>${subject} - ${documentType}</span>
+        </div>`;
+    }
+
+    // Design Puppeteer Footer Template
+    let footerTemplate = '';
+    if (footerImage) {
+      footerTemplate = `
+        <style>
+          html { -webkit-print-color-adjust: exact; }
+          #footer { 
+            padding: 0 !important; 
+            margin: 0 !important; 
+            width: 100% !important;
+            height: 75px !important;
+          }
+        </style>
+        <div style="width: 100%; height: 75px; position: relative; margin: 0; padding: 0;">
+          <img src="${footerImage}" style="position: absolute; bottom: 0; left: 0; width: 100%; height: 100%; object-fit: fill; z-index: -1;" />
+          <div style="position: absolute; bottom: 10px; right: 50px; color: #666; font-size: 8px; font-family: Helvetica, Arial, sans-serif; z-index: 10;">
+            Page <span class="pageNumber"></span> of <span class="totalPages"></span>
+          </div>
+        </div>`;
+    } else {
+      footerTemplate = `
+        <div style="font-size: 9px; font-family: Helvetica, Arial, sans-serif; width: 100%; display: flex; justify-content: space-between; border-top: 1px solid #ddd; padding: 5px 50px 15px 50px; box-sizing: border-box; color: #666;">
+          <span>${documentType} - Direction Classes</span>
+          <span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
+        </div>`;
+    }
+
+    const pdf = await page.pdf({
+      format: 'A4',
+      margin: {
+        top: '75px',
+        bottom: '75px',
+        left: '50px',
+        right: '50px'
+      },
+      displayHeaderFooter: true,
+      headerTemplate,
+      footerTemplate,
+      printBackground: true
+    });
+
+    return pdf;
+  } finally {
+    await page.close();
   }
-
-  // Design Puppeteer Footer Template
-  let footerTemplate = '';
-  if (footerImage) {
-    footerTemplate = `
-      <style>
-        html { -webkit-print-color-adjust: exact; }
-        #footer { 
-          padding: 0 !important; 
-          margin: 0 !important; 
-          width: 100% !important;
-          height: 75px !important;
-        }
-      </style>
-      <div style="width: 100%; height: 75px; position: relative; margin: 0; padding: 0;">
-        <img src="${footerImage}" style="position: absolute; bottom: 0; left: 0; width: 100%; height: 100%; object-fit: fill; z-index: -1;" />
-        <div style="position: absolute; bottom: 10px; right: 50px; color: #666; font-size: 8px; font-family: Helvetica, Arial, sans-serif; z-index: 10;">
-          Page <span class="pageNumber"></span> of <span class="totalPages"></span>
-        </div>
-      </div>`;
-  } else {
-    footerTemplate = `
-      <div style="font-size: 9px; font-family: Helvetica, Arial, sans-serif; width: 100%; display: flex; justify-content: space-between; border-top: 1px solid #ddd; padding: 5px 50px 15px 50px; box-sizing: border-box; color: #666;">
-        <span>${documentType} - Direction Classes</span>
-        <span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
-      </div>`;
-  }
-
-  const pdf = await page.pdf({
-    format: 'A4',
-    margin: {
-      top: '75px',
-      bottom: '75px',
-      left: '50px',
-      right: '50px'
-    },
-    displayHeaderFooter: true,
-    headerTemplate,
-    footerTemplate,
-    printBackground: true
-  });
-
-  await page.close();
-  return pdf;
 }
 
 // Helper: Build structured HTML for the exam/mark scheme

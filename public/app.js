@@ -42,6 +42,7 @@ const validationErrorBox = document.getElementById('validation-error-box');
 const errorMessageText = document.getElementById('error-message-text');
 const generateBtn = document.getElementById('generate-btn');
 const clearTestBtn = document.getElementById('clear-test-btn');
+const shuffleBtn = document.getElementById('shuffle-btn');
 
 // Library Elements
 const questionsLibraryContainer = document.getElementById('questions-library-container');
@@ -70,6 +71,16 @@ window.addEventListener('DOMContentLoaded', () => {
   }
   if (clearTestBtn) {
     clearTestBtn.addEventListener('click', clearDraft);
+  }
+  if (shuffleBtn) {
+    shuffleBtn.addEventListener('click', shuffleSelectedQuestions);
+  }
+  if (randomizeToggle) {
+    randomizeToggle.addEventListener('change', () => {
+      if (randomizeToggle.checked && selectedQuestionIds.length > 1) {
+        shuffleSelectedQuestions();
+      }
+    });
   }
 
   // Load other initializations safely with try-catch blocks to prevent load halts
@@ -628,6 +639,26 @@ function clearDraft() {
   renderTestAssembler();
   showToast('Test draft cleared.', 'info');
 }
+
+// Shuffle Test Draft Questions
+function shuffleSelectedQuestions() {
+  if (selectedQuestionIds.length === 0) {
+    showToast('No questions in draft to shuffle.', 'info');
+    return;
+  }
+  if (selectedQuestionIds.length === 1) {
+    showToast('Add at least 2 questions to shuffle order.', 'info');
+    return;
+  }
+  for (let i = selectedQuestionIds.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [selectedQuestionIds[i], selectedQuestionIds[j]] = [selectedQuestionIds[j], selectedQuestionIds[i]];
+  }
+  renderQuestionLibrary();
+  renderTestAssembler();
+  showToast('Draft questions shuffled!', 'success');
+}
+window.shuffleSelectedQuestions = shuffleSelectedQuestions;
 
 // Enable/Disable generate trigger
 function disableGenerate(errorMessage) {
