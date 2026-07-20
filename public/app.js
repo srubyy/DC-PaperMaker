@@ -641,8 +641,16 @@ function enableGenerate() {
   validationErrorBox.classList.add('hidden');
 }
 
+// Concurrency lock for PDF generator
+let isGenerating = false;
+
 // Generate Paired PDF API Request
 async function generateExamPaper() {
+  if (isGenerating) {
+    console.warn("Generation already in progress, ignoring duplicate trigger.");
+    return;
+  }
+
   const spinner = generateBtn.querySelector('.spinner');
   const btnText = generateBtn.querySelector('.btn-text');
 
@@ -651,6 +659,8 @@ async function generateExamPaper() {
       showToast('Please select at least one question.', 'danger');
       return;
     }
+
+    isGenerating = true;
 
     // Set loading state
     generateBtn.disabled = true;
@@ -707,6 +717,7 @@ async function generateExamPaper() {
     console.error("[generate] Caught generation error:", err);
     showToast(`Error: ${err.message}`, 'danger');
   } finally {
+    isGenerating = false;
     generateBtn.disabled = false;
     spinner.classList.add('hidden');
     btnText.textContent = 'Generate PDFs';
