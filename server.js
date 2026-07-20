@@ -651,8 +651,13 @@ app.post('/api/generate', async (req, res) => {
     console.log(`[generate] ZIP generated and sent successfully for subject: "${subject}"`);
 
   } catch (error) {
-    console.error("PDF generation failed:", error);
-    res.status(500).json({ error: 'Failed to generate PDF documents: ' + error.message });
+    console.error("PDF generation via Puppeteer failed, falling back to client-side renderer:", error.message);
+    return res.json({
+      fallbackHtml: true,
+      subject,
+      questionPaperHtml,
+      markSchemeHtml
+    });
   }
 });
 

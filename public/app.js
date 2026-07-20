@@ -686,19 +686,28 @@ async function generateExamPaper() {
     if (res.status === 401) {
       showToast('Authentication required. Please log in or register to generate exam papers.', 'danger');
       showAuthScreen('login');
-      // Reset loading state
-      generateBtn.disabled = false;
-      spinner.classList.add('hidden');
-      btnText.textContent = 'Generate PDFs';
       return;
     }
 
-    if (!res.ok) {
-      const errData = await res.json();
-      throw new Error(errData.error || 'Failed to generate');
+    const contentType = res.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      const data = await res.json();
+      if (data.fallbackHtml) {
+        showToast('Compiling exam package client-side...', 'info');
+        await generateZipClientSide(data.subject, data.questionPaperHtml, data.markSchemeHtml);
+        showToast('Exam packages downloaded successfully!', 'success');
+        return;
+      }
+      if (data.error) {
+        throw new Error(data.error);
+      }
     }
 
-    // Get zip blob
+    if (!res.ok) {
+      throw new Error('Failed to generate PDF documents.');
+    }
+
+    // Get zip blob directly from binary stream
     const blob = await res.blob();
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -710,7 +719,7 @@ async function generateExamPaper() {
     setTimeout(() => {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-    }, 100);
+    }, 1000);
 
     showToast('Exam packages downloaded successfully!', 'success');
   } catch (err) {
@@ -723,6 +732,55 @@ async function generateExamPaper() {
     btnText.textContent = 'Generate PDFs';
     renderTestAssembler();
   }
+}
+
+// Client-side PDF & ZIP Generator Fallback for Vercel/Serverless
+async function generateZipClientSide(subject, qpHtml, msHtml) {
+  if (typeof html2pdf === 'undefined' || typeof JSZip === 'undefined') {
+    throw new Error('PDF compiler libraries failed to load in browser.');
+  }
+
+  const createPdfBlob = async (htmlContent, docTitle) => {
+    const container = document.createElement('div');
+    container.style.position = 'fixed';
+    container.style.left = '-9999px';
+    container.style.top = '0';
+    container.style.width = '794px'; // A4 width at 96 DPI
+    container.innerHTML = htmlContent;
+    document.body.appendChild(container);
+
+    const opt = {
+      margin:       [8, 8, 8, 8],
+      filename:     `${docTitle}.pdf`,
+      image:        { type: 'jpeg', quality: 0.98 },
+      html2canvas:  { scale: 2, useCORS: true, logging: false },
+      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+
+    const pdfBlob = await html2pdf().set(opt).from(container).output('blob');
+    document.body.removeChild(container);
+    return pdfBlob;
+  };
+
+  const qpBlob = await createPdfBlob(qpHtml, 'Question_Paper');
+  const msBlob = await createPdfBlob(msHtml, 'Mark_Scheme');
+
+  const zip = new JSZip();
+  zip.file('Question_Paper.pdf', qpBlob);
+  zip.file('Mark_Scheme.pdf', msBlob);
+
+  const zipBlob = await zip.generateAsync({ type: 'blob' });
+  const url = window.URL.createObjectURL(zipBlob);
+  const a = document.createElement('a');
+  a.style.display = 'none';
+  a.href = url;
+  a.download = `Direction_Classes_${subject.replace(/\s+/g, '_')}_Exam.zip`;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  }, 1000);
 }
 
 // Brand Image Upload Handling (Header & Footer)
