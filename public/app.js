@@ -704,50 +704,88 @@ async function generateExamPaper() {
       footerImage: footerBase64
     };
     
-    const res = await fetch('/api/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
+    let res = null;
+    try {
+      res = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+    } catch (netErr) {
+      console.warn("[generate] Primary request failed or timed out:", netErr);
+    }
 
-    if (res.status === 401) {
+    if (res && res.status === 401) {
       showToast('Authentication required. Please log in or register to generate exam papers.', 'danger');
       showAuthScreen('login');
       return;
     }
 
-    const contentType = res.headers.get('content-type') || '';
-    if (contentType.includes('application/json')) {
-      const data = await res.json();
-      if (data.fallbackHtml) {
-        showToast('Compiling exam package client-side...', 'info');
-        await generateZipClientSide(data.subject, data.questionPaperHtml, data.markSchemeHtml);
-        showToast('Exam packages downloaded successfully!', 'success');
-        return;
-      }
-      if (data.error) {
-        throw new Error(data.error);
+    const contentType = res ? (res.headers.get('content-type') || '') : '';
+    let data = null;
+
+    // 1. Direct binary ZIP stream success
+    if (res && res.ok && contentType.includes('application/zip')) {
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = `Direction_Classes_${selectedSubject.replace(/\s+/g, '_')}_Exam.zip`;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      }, 1000);
+
+      showToast('Exam packages downloaded successfully!', 'success');
+      return;
+    }
+
+    // 2. Parse JSON response if available
+    if (res && contentType.includes('application/json')) {
+      try {
+        data = await res.json();
+      } catch (e) {
+        data = null;
       }
     }
 
-    if (!res.ok) {
-      throw new Error('Failed to generate PDF documents.');
+    // 3. Server returned fallbackHtml payload (e.g. Vercel mode or server fallback)
+    if (data && data.fallbackHtml && data.questionPaperHtml && data.markSchemeHtml) {
+      showToast('Compiling exam package client-side...', 'info');
+      await generateZipClientSide(data.subject || selectedSubject, data.questionPaperHtml, data.markSchemeHtml);
+      showToast('Exam packages downloaded successfully!', 'success');
+      return;
     }
 
-    // Get zip blob directly from binary stream
-    const blob = await res.blob();
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.style.display = 'none';
-    a.href = url;
-    a.download = `Direction_Classes_${selectedSubject.replace(/\s+/g, '_')}_Exam.zip`;
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => {
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    }, 1000);
+    // 4. Client/User input error (400 Bad Request)
+    if (data && data.error && res && res.status < 500) {
+      throw new Error(data.error);
+    }
 
+    // 5. BULLETPROOF SAFETY NET: Any 504 Gateway Timeout, non-ok response, network error, or non-JSON server error automatically triggers a lightweight fallback template fetch & client-side compilation
+    console.warn("[generate] Non-ok or non-JSON response received. Triggering client-side fallback compiler safety net...");
+    showToast('Server rendering unavailable. Compiling exam package client-side...', 'info');
+
+    const fallbackRes = await fetch('/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...payload, fallbackOnly: true })
+    });
+
+    if (!fallbackRes.ok) {
+      const errText = await fallbackRes.text().catch(() => '');
+      throw new Error(errText || 'Failed to retrieve exam templates for client compilation.');
+    }
+
+    const fallbackData = await fallbackRes.json();
+    if (!fallbackData.questionPaperHtml || !fallbackData.markSchemeHtml) {
+      throw new Error(fallbackData.error || 'Invalid exam templates returned.');
+    }
+
+    await generateZipClientSide(fallbackData.subject || selectedSubject, fallbackData.questionPaperHtml, fallbackData.markSchemeHtml);
     showToast('Exam packages downloaded successfully!', 'success');
   } catch (err) {
     console.error("[generate] Caught generation error:", err);

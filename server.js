@@ -634,6 +634,17 @@ app.post('/api/generate', async (req, res) => {
       footerImage
     });
 
+    // Stop attempting server-side Puppeteer rendering on Vercel serverless entirely
+    if (process.env.VERCEL || req.body.fallbackOnly) {
+      console.log(`[generate] Skipping Puppeteer (VERCEL environment detected or fallback requested). Returning HTML payload for client compilation.`);
+      return res.json({
+        fallbackHtml: true,
+        subject,
+        questionPaperHtml,
+        markSchemeHtml
+      });
+    }
+
     // Render PDFs using Puppeteer
     let browser;
     try {
