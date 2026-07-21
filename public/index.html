@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=2.0">
+  <link rel="stylesheet" href="style.css?v=3.0">
   <!-- Client-side PDF & ZIP generation libraries for Vercel Serverless environment -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
@@ -197,13 +197,13 @@
           <!-- Randomize Option -->
           <div class="form-group toggle-group" style="margin-top: 15px; margin-bottom: 15px;">
             <div class="toggle-description">
-              <label for="randomize-toggle" style="font-weight: 600; font-size: 0.85rem; display: block; color: var(--text-primary);">Shuffle Final Output</label>
+              <span style="font-weight: 600; font-size: 0.85rem; display: block; color: var(--text-primary);">Shuffle Final Output</span>
               <p class="help-text" style="font-size: 0.75rem; color: var(--text-muted);">Shuffle questions in final generated PDF</p>
             </div>
-            <label class="switch">
-              <input type="checkbox" id="randomize-toggle">
-              <span class="toggle-slider"></span>
-            </label>
+            <div id="randomize-toggle-wrap" onclick="window.toggleRandomize()" style="width:44px;height:24px;border-radius:24px;background:#cbd5e1;position:relative;cursor:pointer;transition:background 0.25s;flex-shrink:0;" title="Shuffle Final Output">
+              <div id="randomize-knob" style="width:16px;height:16px;border-radius:50%;background:#fff;position:absolute;top:4px;left:4px;transition:transform 0.25s;box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>
+            </div>
+            <input type="checkbox" id="randomize-toggle" style="display:none;">
           </div>
 
           <div class="error-container hidden" id="validation-error-box">
@@ -215,7 +215,7 @@
             <button id="clear-test-btn" class="btn btn-outline" style="flex: 1; padding: 12px 6px;">
               <span class="btn-text">Clear Draft</span>
             </button>
-            <button id="generate-btn" class="btn btn-primary" style="flex: 2; padding: 12px 6px;">
+            <button id="generate-btn" class="btn btn-primary" style="flex: 2; padding: 12px 6px;" onclick="window.generateExamPaper()">
               <span class="btn-text">Generate PDFs</span>
               <div class="spinner hidden"></div>
             </button>
@@ -340,6 +340,6 @@
   <!-- Toast Notification Container -->
   <div id="toast-container" class="toast-container"></div>
 
-  <script src="app.js?v=2.0"></script>
+  <script src="app.js?v=3.0"></script>
 </body>
 </html>

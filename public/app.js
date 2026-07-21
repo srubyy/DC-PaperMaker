@@ -659,15 +659,34 @@ function shuffleSelectedQuestions() {
 }
 window.shuffleSelectedQuestions = shuffleSelectedQuestions;
 
-// Enable/Disable generate trigger
+// Toggle randomize on/off — used by inline onclick div toggle
+window.toggleRandomize = function() {
+  const tog = document.getElementById('randomize-toggle');
+  const wrap = document.getElementById('randomize-toggle-wrap');
+  const knob = document.getElementById('randomize-knob');
+  if (!tog) return;
+  tog.checked = !tog.checked;
+  if (tog.checked) {
+    wrap.style.background = 'var(--color-accent, #6366f1)';
+    knob.style.transform = 'translateX(20px)';
+    if (selectedQuestionIds.length > 1) shuffleSelectedQuestions();
+    showToast('Shuffle enabled — questions will be randomised in the PDF.', 'success');
+  } else {
+    wrap.style.background = '#cbd5e1';
+    knob.style.transform = 'translateX(0)';
+    showToast('Shuffle disabled.', 'info');
+  }
+};
+
+// Enable/Disable generate trigger — visual feedback only, button stays always clickable
 function disableGenerate(errorMessage) {
-  generateBtn.disabled = true;
+  if (generateBtn) generateBtn.style.opacity = '0.5';
   validationErrorBox.classList.remove('hidden');
   errorMessageText.textContent = errorMessage;
 }
 
 function enableGenerate() {
-  generateBtn.disabled = false;
+  if (generateBtn) generateBtn.style.opacity = '1';
   validationErrorBox.classList.add('hidden');
 }
 
