@@ -79,6 +79,9 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Initialize the test assembler state (disables Generate button until questions are added)
+  renderTestAssembler();
+
   // Load other initializations safely with try-catch blocks to prevent load halts
   try {
     loadSubjects();
