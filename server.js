@@ -303,7 +303,13 @@ async function getBrowser() {
     const puppeteer = puppeteerModule.default || puppeteerModule;
     return await puppeteer.launch({
       headless: 'new',
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--disable-gpu'
+      ]
     });
   }
 }
@@ -474,6 +480,9 @@ app.post('/api/generate', async (req, res) => {
     return res.status(400).json({ error: 'Subject parameter is required' });
   }
 
+  let questionPaperHtml = '';
+  let markSchemeHtml = '';
+
   try {
     const db = await getDb();
     let finalQuestionsList = [];
@@ -596,9 +605,6 @@ app.post('/api/generate', async (req, res) => {
 
     // Generate total marks
     const totalMarks = processedQuestions.reduce((sum, q) => sum + q.marks, 0);
-
-    let questionPaperHtml = '';
-    let markSchemeHtml = '';
 
     // Build HTML for Question Paper
     questionPaperHtml = buildPaperHtml({

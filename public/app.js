@@ -42,7 +42,6 @@ const validationErrorBox = document.getElementById('validation-error-box');
 const errorMessageText = document.getElementById('error-message-text');
 const generateBtn = document.getElementById('generate-btn');
 const clearTestBtn = document.getElementById('clear-test-btn');
-const shuffleBtn = document.getElementById('shuffle-btn');
 
 // Library Elements
 const questionsLibraryContainer = document.getElementById('questions-library-container');
@@ -71,9 +70,6 @@ window.addEventListener('DOMContentLoaded', () => {
   }
   if (clearTestBtn) {
     clearTestBtn.addEventListener('click', clearDraft);
-  }
-  if (shuffleBtn) {
-    shuffleBtn.addEventListener('click', shuffleSelectedQuestions);
   }
   if (randomizeToggle) {
     randomizeToggle.addEventListener('change', () => {

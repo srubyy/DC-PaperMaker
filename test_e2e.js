@@ -14,8 +14,8 @@ async function runTest() {
   
   try {
     // Navigate to local server
-    console.log("Navigating to http://localhost:3080...");
-    await page.goto('http://localhost:3080', { waitUntil: 'networkidle0' });
+    console.log("Navigating to http://localhost:3085...");
+    await page.goto('http://localhost:3085', { waitUntil: 'networkidle0' });
 
     // 1. Verify page title
     const title = await page.title();
@@ -24,93 +24,82 @@ async function runTest() {
       throw new Error("Page title mismatch");
     }
 
+    // 1.5 Login Flow
+    console.log("Logging in as demo user...");
+    await page.waitForSelector('#login-email');
+    await page.type('#login-email', 'demo@example.com');
+    await page.type('#login-password', 'Password123!');
+    await page.click('#login-submit-btn');
+    
+    console.log("Waiting for dashboard to load...");
+    await page.waitForFunction(() => !document.getElementById('app-dashboard-view').classList.contains('hidden'), { timeout: 10000 });
+
     // 2. Select Chemistry from dropdown
     console.log("Selecting subject: Chemistry...");
     await page.waitForSelector('#subject-select');
     await page.select('#subject-select', 'Chemistry');
 
-    // Wait for dynamic topics list to render
-    console.log("Waiting for topics list to render...");
-    await page.waitForSelector('#chk-Chemical_Bonding');
-    console.log("Topics loaded successfully.");
+    // Wait for dynamic topics and library to render
+    console.log("Waiting for topics list and library card to render...");
+    await page.waitForSelector('#chk-Covalent_Bonding');
+    await page.waitForSelector('#card-CHEM_CB_0001');
+    console.log("Topics and question cards loaded successfully.");
 
-    // 3. Select Chemical Bonding and request 2 questions
-    console.log("Selecting 'Chemical Bonding' checkbox...");
-    await page.click('#chk-Chemical_Bonding');
+     // 3. Select question CHEM-CB-0001 (5 marks)
+    console.log("Clicking 'Add to Test' for CHEM-CB-0001...");
+    await page.waitForSelector('#card-CHEM_CB_0001 .btn-add');
+    await page.evaluate(() => document.querySelector('#card-CHEM_CB_0001 .btn-add').click());
     
-    console.log("Setting 'Chemical Bonding' count to 2...");
-    await page.evaluate(() => {
-      const input = document.querySelector('#qty-Chemical_Bonding');
-      input.value = '2';
-      input.dispatchEvent(new Event('input'));
-    });
-
-    // Verify marks total is 7
+    // Verify marks total is 5
     let marks = await page.$eval('#total-marks-display', el => el.textContent);
-    console.log(`Current Total Marks display: ${marks}`);
-    if (marks !== '7') {
-      throw new Error(`Expected total marks to be 7, but got ${marks}`);
+    let count = await page.$eval('#selected-questions-count', el => el.textContent);
+    console.log(`Current Total Marks display: ${marks}, count: ${count}`);
+    if (marks !== '5' || count !== '1') {
+      throw new Error(`Expected 5 marks and 1 question, but got ${marks} marks and ${count} questions`);
     }
-    console.log("✔ Marks calculation verified: 7 Marks");
+    console.log("✔ First question addition verified");
 
-    // 4. Test Over-limit Validation: Select Organic Chemistry and set count to 4 (only 3 exist in DB)
-    console.log("Selecting 'Organic Chemistry' checkbox...");
-    await page.click('#chk-Organic_Chemistry');
-    
-    console.log("Setting 'Organic Chemistry' count to 4 (exceeding availability)...");
-    await page.evaluate(() => {
-      const input = document.querySelector('#qty-Organic_Chemistry');
-      input.value = '4';
-      input.dispatchEvent(new Event('input'));
-    });
+    // 4. Select question CHEM-CB-0002 (2 marks)
+    console.log("Clicking 'Add to Test' for CHEM-CB-0002...");
+    await page.waitForSelector('#card-CHEM_CB_0002 .btn-add');
+    await page.evaluate(() => document.querySelector('#card-CHEM_CB_0002 .btn-add').click());
 
-    // Check error display
-    const isErrorVisible = await page.$eval('#validation-error-box', el => !el.classList.contains('hidden'));
-    const errorMessage = await page.$eval('#error-message-text', el => el.textContent);
-    const isBtnDisabled = await page.$eval('#generate-btn', el => el.disabled);
-    
-    console.log(`Error visible: ${isErrorVisible}`);
-    console.log(`Error message displayed: "${errorMessage}"`);
-    console.log(`Generate button disabled: ${isBtnDisabled}`);
-
-    if (!isErrorVisible || !isBtnDisabled || !errorMessage.includes("requested 4 questions, but only 3 available")) {
-      throw new Error("Validation check failed: error box not showing or button is not disabled");
-    }
-    console.log("✔ Over-limit validation verified (Error displayed and generation blocked)");
-
-    // 5. Restore valid quantity: Set Organic Chemistry to 2
-    console.log("Restoring 'Organic Chemistry' count to 2 (valid)...");
-    await page.evaluate(() => {
-      const input = document.querySelector('#qty-Organic_Chemistry');
-      input.value = '2';
-      input.dispatchEvent(new Event('input'));
-    });
-
-    const isErrorHidden = await page.$eval('#validation-error-box', el => el.classList.contains('hidden'));
-    const isBtnEnabled = await page.$eval('#generate-btn', el => !el.disabled);
     marks = await page.$eval('#total-marks-display', el => el.textContent);
-    
-    console.log(`Error hidden: ${isErrorHidden}`);
-    console.log(`Generate button enabled: ${isBtnEnabled}`);
-    console.log(`New Total Marks: ${marks}`); // CHEM-CB-0001 (5) + CHEM-CB-0002 (2) + CHEM-OC-0001 (4) + CHEM-OC-0002 (5) = 16 marks
-
-    if (!isErrorHidden || !isBtnEnabled || marks !== '16') {
-      throw new Error("Error states not cleared or marks miscalculated after adjustment");
+    count = await page.$eval('#selected-questions-count', el => el.textContent);
+    console.log(`Current Total Marks display: ${marks}, count: ${count}`);
+    if (marks !== '7' || count !== '2') {
+      throw new Error(`Expected 7 marks and 2 questions, but got ${marks} marks and ${count} questions`);
     }
-    console.log("✔ Safe quantity adjustment verified: 16 Marks");
+    console.log("✔ Second question addition verified: 7 Marks");
+
+    // 5. Test Filters: uncheck "Easy" difficulty and verify CHEM-CB-0002 (Easy) is hidden
+    console.log("Unchecking 'Easy' difficulty filter...");
+    await page.evaluate(() => document.getElementById('diff-easy').click());
+    
+    // Wait for card to disappear
+    await page.waitForFunction(() => !document.getElementById('card-CHEM_CB_0002'));
+    console.log("✔ Easy question hidden after unchecking Easy filter");
+
+    // Restore Easy filter
+    console.log("Rechecking 'Easy' difficulty filter...");
+    await page.evaluate(() => document.getElementById('diff-easy').click());
+    await page.waitForSelector('#card-CHEM_CB_0002');
+    console.log("✔ Easy question reappeared");
+
+    // 5.5. Test Shuffle Toggle
+    console.log("Testing Shuffle functionality...");
+    await page.evaluate(() => document.getElementById('randomize-toggle').click());
+    console.log("✔ Shuffle Final Output toggle toggled successfully");
 
     // 6. Test Generation Request
-    console.log("Clicking 'Generate Paired PDFs' button...");
+    console.log("Clicking 'Generate PDFs' button...");
     await page.evaluate(() => document.getElementById('generate-btn').click());
     
     console.log("Waiting for successful toast notification...");
-    await page.waitForSelector('.toast-success', { timeout: 15000 });
-    const toastText = await page.$eval('.toast-success', el => el.textContent);
-    console.log("Success Toast text:", toastText.trim());
-    
-    if (!toastText.includes("downloaded successfully")) {
-      throw new Error("Generation failure toast message");
-    }
+    await page.waitForFunction(() => {
+      const toasts = Array.from(document.querySelectorAll('.toast-success'));
+      return toasts.some(t => t.textContent.includes('downloaded successfully'));
+    }, { timeout: 15000 });
     console.log("✔ PDF and ZIP Generation engine verified");
     
     console.log("\nALL UI & PDF GENERATION TESTS PASSED SUCCESSFULLY! 🚀");
