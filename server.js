@@ -12,6 +12,8 @@ import { fileURLToPath } from 'url';
 import { getDb, initDb } from './db.js';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import PDFDocument from 'pdfkit';
+
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const JWT_SECRET = process.env.JWT_SECRET || 'direction-classes-secret-key-13579';
@@ -634,52 +636,48 @@ app.post('/api/generate', async (req, res) => {
       footerImage
     });
 
-    // Stop attempting server-side Puppeteer rendering on Vercel serverless entirely
-    if (process.env.VERCEL || req.body.fallbackOnly) {
-      console.log(`[generate] Skipping Puppeteer (VERCEL environment detected or fallback requested). Returning HTML payload for client compilation.`);
-      return res.json({
-        fallbackHtml: true,
+    // Generate PDFs using PDFKit (pure Node.js, no Puppeteer/Chrome required)
+    const [qpPdf, msPdf] = await Promise.all([
+      buildPaperPdf({
         subject,
-        questionPaperHtml,
-        markSchemeHtml
-      });
-    }
+        title: `${subject} Examination`,
+        subtitle: 'Question Paper',
+        totalMarks,
+        yearMin,
+        yearMax,
+        questions: processedQuestions,
+        isMarkScheme: false,
+        headerImage,
+        footerImage
+      }),
+      buildPaperPdf({
+        subject,
+        title: `${subject} Examination`,
+        subtitle: 'Mark Scheme',
+        totalMarks,
+        yearMin,
+        yearMax,
+        questions: processedQuestions,
+        isMarkScheme: true,
+        headerImage,
+        footerImage
+      })
+    ]);
 
-    // Render PDFs using Puppeteer
-    let browser;
-    try {
-      browser = await getBrowser();
+    // Pack into a ZIP file
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="Direction_Classes_${subject.replace(/\s+/g, '_')}_Exam.zip"`);
 
-      const [qpPdf, msPdf] = await Promise.all([
-        renderPdf(browser, questionPaperHtml, subject, 'Question Paper', headerImage, footerImage),
-        renderPdf(browser, markSchemeHtml, subject, 'Mark Scheme', headerImage, footerImage)
-      ]);
-
-      await browser.close();
-      browser = null;
-
-      // Pack into a ZIP file
-      res.setHeader('Content-Type', 'application/zip');
-      res.setHeader('Content-Disposition', `attachment; filename="Direction_Classes_${subject.replace(/\s+/g, '_')}_Exam.zip"`);
-
-      const archive = archiver('zip', { zlib: { level: 9 } });
-      archive.on('error', (err) => {
-        throw err;
-      });
-
-      archive.pipe(res);
-      archive.append(qpPdf, { name: 'Question_Paper.pdf' });
-      archive.append(msPdf, { name: 'Mark_Scheme.pdf' });
-      await archive.finalize();
-      console.log(`[generate] ZIP generated and sent successfully for subject: "${subject}"`);
-    } finally {
-      if (browser) {
-        try { await browser.close(); } catch (e) {}
-      }
-    }
+    const archive = archiver('zip', { zlib: { level: 9 } });
+    archive.on('error', (err) => { throw err; });
+    archive.pipe(res);
+    archive.append(qpPdf, { name: 'Question_Paper.pdf' });
+    archive.append(msPdf, { name: 'Mark_Scheme.pdf' });
+    await archive.finalize();
+    console.log(`[generate] ZIP generated and sent successfully for subject: "${subject}"`);
 
   } catch (error) {
-    console.error("PDF generation via Puppeteer failed, falling back to client-side renderer:", error.message);
+    console.error("PDF generation failed:", error.message);
     if (questionPaperHtml && markSchemeHtml) {
       return res.json({
         fallbackHtml: true,
@@ -693,82 +691,221 @@ app.post('/api/generate', async (req, res) => {
   }
 });
 
-// Helper: Render HTML to PDF via Puppeteer
-async function renderPdf(browser, html, subject, documentType, headerImage, footerImage) {
-  const page = await browser.newPage();
-  try {
-    await page.setContent(html, { waitUntil: 'domcontentloaded' });
+// Helper: Build a PDF using PDFKit (pure Node.js — no Puppeteer/Chrome needed)
+function buildPaperPdf({ subject, title, subtitle, totalMarks, yearMin, yearMax, questions, isMarkScheme, headerImage, footerImage }) {
+  return new Promise((resolve, reject) => {
+    try {
+      const doc = new PDFDocument({
+        size: 'A4',
+        margins: { top: 72, bottom: 72, left: 56, right: 56 },
+        info: {
+          Title: `${title} - ${subtitle}`,
+          Author: 'Direction Classes',
+          Subject: subject
+        }
+      });
 
-    // Design Puppeteer Header Template
-    let headerTemplate = '';
-    if (headerImage) {
-      headerTemplate = `
-        <style>
-          html { -webkit-print-color-adjust: exact; }
-          #header { 
-            padding: 0 !important; 
-            margin: 0 !important; 
-            width: 100% !important;
-            height: 75px !important;
+      const chunks = [];
+      doc.on('data', chunk => chunks.push(chunk));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      const W = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+      const accentColor = '#1e3a5f';
+      const lightGray = '#888888';
+      const borderColor = '#cccccc';
+
+      // ── HEADER & FOOTER on every page ──────────────────────────────────────
+      const addHeaderFooter = () => {
+        const pageRange = doc.bufferedPageRange();
+        for (let i = 0; i < pageRange.count; i++) {
+          doc.switchToPage(pageRange.start + i);
+          const savedY = doc.y;
+
+          // Header
+          const headerY = 20;
+          if (headerImage && headerImage.startsWith('data:')) {
+            try {
+              const base64Data = headerImage.split(',')[1];
+              const imgBuffer = Buffer.from(base64Data, 'base64');
+              doc.image(imgBuffer, doc.page.margins.left, headerY, { width: W, height: 40, fit: [W, 40] });
+            } catch (e) {
+              doc.fontSize(8).fillColor(lightGray)
+                 .text('Direction Classes', doc.page.margins.left, headerY)
+                 .text(`${subject} - ${subtitle}`, { align: 'right' });
+            }
+          } else {
+            doc.fontSize(8).fillColor(lightGray)
+               .text('DIRECTION CLASSES', doc.page.margins.left, headerY, { continued: true })
+               .text(`${subject.toUpperCase()} — ${subtitle.toUpperCase()}`, { align: 'right' })
+               .moveTo(doc.page.margins.left, headerY + 12)
+               .lineTo(doc.page.margins.left + W, headerY + 12)
+               .strokeColor(borderColor).stroke();
           }
-        </style>
-        <div style="width: 100%; height: 75px; position: relative; margin: 0; padding: 0;">
-          <img src="${headerImage}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: fill; z-index: -1;" />
-        </div>`;
-    } else {
-      headerTemplate = `
-        <div style="font-size: 9px; font-family: Helvetica, Arial, sans-serif; width: 100%; display: flex; justify-content: space-between; border-bottom: 1px solid #ddd; padding: 15px 50px 5px 50px; box-sizing: border-box; color: #666;">
-          <span style="font-weight: bold; text-transform: uppercase;">Direction Classes</span>
-          <span>${subject} - ${documentType}</span>
-        </div>`;
-    }
 
-    // Design Puppeteer Footer Template
-    let footerTemplate = '';
-    if (footerImage) {
-      footerTemplate = `
-        <style>
-          html { -webkit-print-color-adjust: exact; }
-          #footer { 
-            padding: 0 !important; 
-            margin: 0 !important; 
-            width: 100% !important;
-            height: 75px !important;
+          // Footer
+          const footerY = doc.page.height - doc.page.margins.bottom + 15;
+          if (footerImage && footerImage.startsWith('data:')) {
+            try {
+              const base64Data = footerImage.split(',')[1];
+              const imgBuffer = Buffer.from(base64Data, 'base64');
+              doc.image(imgBuffer, doc.page.margins.left, footerY - 10, { width: W, height: 35, fit: [W, 35] });
+            } catch (e) {
+              doc.fontSize(8).fillColor(lightGray)
+                 .text(`Page ${i + 1}`, doc.page.margins.left, footerY, { align: 'right' });
+            }
+          } else {
+            doc.moveTo(doc.page.margins.left, footerY - 5)
+               .lineTo(doc.page.margins.left + W, footerY - 5)
+               .strokeColor(borderColor).stroke();
+            doc.fontSize(8).fillColor(lightGray)
+               .text(`${subtitle} — Direction Classes`, doc.page.margins.left, footerY, { continued: true, width: W })
+               .text(`Page ${i + 1}`, { align: 'right' });
           }
-        </style>
-        <div style="width: 100%; height: 75px; position: relative; margin: 0; padding: 0;">
-          <img src="${footerImage}" style="position: absolute; bottom: 0; left: 0; width: 100%; height: 100%; object-fit: fill; z-index: -1;" />
-          <div style="position: absolute; bottom: 10px; right: 50px; color: #666; font-size: 8px; font-family: Helvetica, Arial, sans-serif; z-index: 10;">
-            Page <span class="pageNumber"></span> of <span class="totalPages"></span>
-          </div>
-        </div>`;
-    } else {
-      footerTemplate = `
-        <div style="font-size: 9px; font-family: Helvetica, Arial, sans-serif; width: 100%; display: flex; justify-content: space-between; border-top: 1px solid #ddd; padding: 5px 50px 15px 50px; box-sizing: border-box; color: #666;">
-          <span>${documentType} - Direction Classes</span>
-          <span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
-        </div>`;
+
+          doc.y = savedY;
+        }
+      };
+
+      // ── COVER PAGE ─────────────────────────────────────────────────────────
+      const startY = 140;
+      doc.fontSize(11).fillColor(lightGray).font('Helvetica')
+         .text('DIRECTION CLASSES', doc.page.margins.left, startY, { align: 'center', width: W });
+
+      doc.moveDown(0.5);
+      doc.fontSize(26).fillColor(accentColor).font('Helvetica-Bold')
+         .text(title, { align: 'center', width: W });
+
+      doc.moveDown(0.4);
+      doc.fontSize(16).fillColor('#444444').font('Helvetica')
+         .text(subtitle.toUpperCase(), { align: 'center', width: W });
+
+      // Divider
+      doc.moveDown(1.5);
+      const divX = doc.page.margins.left + W * 0.15;
+      const divW = W * 0.7;
+      doc.moveTo(divX, doc.y).lineTo(divX + divW, doc.y).strokeColor(accentColor).lineWidth(1.5).stroke();
+      doc.moveDown(1.5);
+
+      // Meta info table
+      const tableX = doc.page.margins.left + W * 0.1;
+      const tableW = W * 0.8;
+      const colLabel = 180;
+      const rowH = 22;
+      const rows = [
+        ['Subject', subject],
+        ['Year Scope', `${yearMin} — ${yearMax}`],
+        ['Total Marks', `${totalMarks} Marks`],
+        ['Allocated Time', `${Math.max(30, totalMarks * 1.5)} Minutes`]
+      ];
+
+      rows.forEach(([label, value], ri) => {
+        const rowY = doc.y;
+        const bg = ri % 2 === 0 ? '#f8f9fa' : '#ffffff';
+        doc.rect(tableX, rowY, tableW, rowH).fillColor(bg).fill();
+        doc.fontSize(10).fillColor('#555555').font('Helvetica-Bold')
+           .text(label, tableX + 10, rowY + 6, { width: colLabel });
+        doc.fontSize(10).fillColor('#111111').font('Helvetica')
+           .text(value, tableX + colLabel + 10, rowY + 6, { width: tableW - colLabel - 20 });
+        doc.y = rowY + rowH;
+      });
+      doc.rect(tableX, doc.y - rows.length * rowH, tableW, rows.length * rowH).strokeColor(borderColor).lineWidth(0.5).stroke();
+
+      // Instructions box
+      doc.moveDown(2);
+      const instrX = tableX;
+      const instrW = tableW;
+      const instrStartY = doc.y;
+      doc.fontSize(10).fillColor(accentColor).font('Helvetica-Bold')
+         .text('Instructions to Candidates', instrX + 10, instrStartY + 8, { width: instrW - 20 });
+      doc.moveDown(0.6);
+      const instrItems = [
+        'Answer all questions in the spaces provided.',
+        'Show all your workings clearly. Marks are awarded for clear logic.',
+        'Calculators are permitted where appropriate.',
+        'Do not write in the margins or headers/footers.'
+      ];
+      instrItems.forEach(item => {
+        doc.fontSize(9).fillColor('#333333').font('Helvetica')
+           .text(`• ${item}`, instrX + 10, doc.y, { width: instrW - 20 });
+        doc.moveDown(0.3);
+      });
+      const instrEndY = doc.y + 8;
+      doc.rect(instrX, instrStartY, instrW, instrEndY - instrStartY).strokeColor(borderColor).lineWidth(0.5).stroke();
+      doc.y = instrEndY;
+
+      // ── QUESTIONS SECTION ───────────────────────────────────────────────────
+      doc.addPage();
+
+      const stripHtml = (html) => {
+        if (!html) return '';
+        return html
+          .replace(/<br\s*\/?>/gi, '\n')
+          .replace(/<\/p>/gi, '\n')
+          .replace(/<\/div>/gi, '\n')
+          .replace(/<li>/gi, '• ')
+          .replace(/<\/li>/gi, '\n')
+          .replace(/<[^>]+>/g, '')
+          .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ')
+          .replace(/\[IMAGE:[^\]]+\]/gi, '[See image in digital version]')
+          .replace(/\n{3,}/g, '\n\n')
+          .trim();
+      };
+
+      questions.forEach((q, index) => {
+        // Check if we need a new page (leave at least 80pt for a question)
+        if (doc.y > doc.page.height - doc.page.margins.bottom - 100) {
+          doc.addPage();
+        }
+
+        const qLabel = isMarkScheme ? `Question ${index + 1} Mark Scheme` : `Question ${index + 1}`;
+        const metaLabel = `[${q.marks} Mark${q.marks > 1 ? 's' : ''} | ${q.id}]`;
+
+        // Question header bar
+        const headerStartY = doc.y;
+        doc.rect(doc.page.margins.left, headerStartY, W, 18).fillColor('#eef2f7').fill();
+        doc.fontSize(10).fillColor(accentColor).font('Helvetica-Bold')
+           .text(qLabel, doc.page.margins.left + 6, headerStartY + 4, { continued: true, width: W - 12 })
+           .fillColor(lightGray).font('Helvetica').fontSize(9)
+           .text(metaLabel, { align: 'right' });
+        doc.moveTo(doc.page.margins.left, headerStartY + 18).lineTo(doc.page.margins.left + W, headerStartY + 18).strokeColor(accentColor).lineWidth(0.8).stroke();
+        doc.y = headerStartY + 22;
+
+        // Question / Answer body
+        const rawText = isMarkScheme ? q.answer_text : q.question_text;
+        const bodyText = stripHtml(rawText);
+        doc.fontSize(10).fillColor('#222222').font('Helvetica')
+           .text(bodyText, doc.page.margins.left, doc.y, { width: W, lineGap: 2 });
+
+        // Workspace lines for question paper
+        if (!isMarkScheme) {
+          const lineCount = q.marks >= 3 ? 8 : q.marks === 2 ? 5 : 3;
+          doc.moveDown(0.6);
+          for (let l = 0; l < lineCount; l++) {
+            if (doc.y > doc.page.height - doc.page.margins.bottom - 20) {
+              doc.addPage();
+            }
+            doc.moveTo(doc.page.margins.left, doc.y)
+               .lineTo(doc.page.margins.left + W, doc.y)
+               .strokeColor('#dddddd').lineWidth(0.4).stroke();
+            doc.y += 14;
+          }
+        }
+
+        doc.moveDown(1.2);
+      });
+
+      // Add headers/footers to all pages
+      addHeaderFooter();
+
+      doc.end();
+    } catch (err) {
+      reject(err);
     }
-
-    const pdf = await page.pdf({
-      format: 'A4',
-      margin: {
-        top: '75px',
-        bottom: '75px',
-        left: '50px',
-        right: '50px'
-      },
-      displayHeaderFooter: true,
-      headerTemplate,
-      footerTemplate,
-      printBackground: true
-    });
-
-    return pdf;
-  } finally {
-    await page.close();
-  }
+  });
 }
+
+
 
 // Helper: Build structured HTML for the exam/mark scheme
 function buildPaperHtml({ subject, title, subtitle, totalMarks, yearMin, yearMax, questions, isMarkScheme, headerImage, footerImage }) {
